@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>World 1 — The Wreck — Null Island</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../../css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+</head>
+<body>
+<header class="hero" style="padding:2rem 1.5rem 1rem;">
+  <h1 style="font-size:1.8rem;">World 1 — The Wreck</h1>
+  <p>The ship is scrap. There's a gap in the hull plating ahead — you'll need to jump it. Write code to walk your character to the flag.</p>
+</header>
+<div class="wrap">
+  <p style="text-align:center;"><a href="../../index.html">&larr; back to Null Island</a></p>
+  <div class="world-layout">
+    <div class="panel">
+      <div id="level-canvas-holder"></div>
+      <div class="controls">
+        <button class="button" id="run-btn">Run</button>
+        <span id="status">Write your moves, then press Run.</span>
+      </div>
+    </div>
+    <div class="panel editor-panel">
+      <h2>Your code</h2>
+      <textarea id="code">// Get to the flag. moveRight() walks one step.
+// jump() leaps two steps forward, clearing a gap.
+moveRight();
+moveRight();
+</textarea>
+      <div class="hint">
+        Commands: <code>moveRight()</code>, <code>moveLeft()</code>, <code>jump()</code> (clears a 1-tile gap).
+        The flag is 11 steps from the start, with two gaps along the way.
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="../../js/engine.js"></script>
+<script src="world1.js"></script>
+</body>
+</html>
