@@ -20,3 +20,8 @@ npx serve .
 
 The first playable slice: [`levels/world1/`](levels/world1/). Teaches
 sequential commands (`moveRight()`, `jump()`).
+
+<p>
+  <img src="README_media/world1-start.png" alt="World 1 start: player at the wreck, first gap ahead" width="420">
+  <img src="README_media/world1-win.png" alt="World 1 cleared: player at the flag after jumping both gaps" width="420">
+</p>

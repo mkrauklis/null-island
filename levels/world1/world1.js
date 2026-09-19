@@ -19,9 +19,9 @@ let lastFrameMs;
 
 function sketch(p) {
   p.setup = () => {
-    const canvas = p.createCanvas(12 * 48, 320);
+    const canvas = p.createCanvas(480, 320);
     canvas.parent('level-canvas-holder');
-    runner = new SideScrollerRunner(p, LEVEL, { groundY: 260 });
+    runner = new SideScrollerRunner(p, LEVEL, { viewportW: 480, viewportH: 320, groundY: 240 });
     lastFrameMs = performance.now();
   };
 
