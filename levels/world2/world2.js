@@ -1,18 +1,34 @@
-// World 1 — The Wreck. Sequential commands only: moveRight(), moveLeft(), jump().
-const WORLD_ID = 'world1';
+// World 2 — The Vents. Loops. A grid maze with a patrolling Scanner.
+const WORLD_ID = 'world2';
+const ROWS = 6;
+const COLS = 10;
+
+const grid = [];
+for (let r = 0; r < ROWS; r++) {
+  const row = [];
+  for (let c = 0; c < COLS; c++) {
+    row.push((r === ROWS - 1 || c === COLS - 1) ? 'floor' : 'wall');
+  }
+  grid.push(row);
+}
+
 const LEVEL = {
-  startCol: 0,
-  columns: [
-    'ground', 'ground', 'ground', 'gap', 'ground', 'ground', 'ground',
-    'gap', 'ground', 'ground', 'ground', 'goal',
-  ],
+  grid,
+  start: { row: ROWS - 1, col: 0 },
+  goal: { row: 0, col: COLS - 1 },
+  scanner: {
+    path: [6, 5, 4, 3, 4, 5].map((c) => ({ row: ROWS - 1, col: c })),
+  },
 };
-LEVEL.parMoves = computeMinMoves(LEVEL);
+LEVEL.parMoves = computeMinMovesGrid(LEVEL);
 
 const COMMANDS = [
   { id: 'moveRight', label: 'moveRight()', insert: 'moveRight();\n', pattern: /moveRight\s*\(/ },
   { id: 'moveLeft', label: 'moveLeft()', insert: 'moveLeft();\n', pattern: /moveLeft\s*\(/ },
-  { id: 'jump', label: 'jump()', insert: 'jump();\n', pattern: /jump\s*\(/ },
+  { id: 'moveUp', label: 'moveUp()', insert: 'moveUp();\n', pattern: /moveUp\s*\(/ },
+  { id: 'moveDown', label: 'moveDown()', insert: 'moveDown();\n', pattern: /moveDown\s*\(/ },
+  { id: 'wait', label: 'wait()', insert: 'wait();\n', pattern: /wait\s*\(/ },
+  { id: 'forLoop', label: 'for loop', insert: 'for (let i = 0; i < 3; i++) {\n  \n}\n', pattern: /for\s*\(/ },
 ];
 
 let runner;
@@ -23,9 +39,9 @@ let resultCache = null;
 
 function sketch(p) {
   p.setup = () => {
-    const canvas = p.createCanvas(480, 320);
+    const canvas = p.createCanvas(COLS * 48, ROWS * 48);
     canvas.parent('level-canvas-holder');
-    runner = new SideScrollerRunner(p, LEVEL, { viewportW: 480, viewportH: 320, groundY: 240 });
+    runner = new GridMazeRunner(p, LEVEL, { tile: 48 });
     lastFrameMs = performance.now();
   };
 
@@ -67,11 +83,14 @@ function renderStatus() {
   switch (runner.status) {
     case 'won': {
       const r = resultCache;
-      statusEl.textContent = `Reached the flag in ${r.moves} moves — best ${r.bestMoves}${r.starred ? ' ★' : ''} (par ${LEVEL.parMoves}).`;
+      statusEl.textContent = `Made it to the grate in ${r.moves} moves — best ${r.bestMoves}${r.starred ? ' ★' : ''} (par ${LEVEL.parMoves}).`;
       break;
     }
-    case 'fell':
-      statusEl.textContent = 'You fell in a gap. Edit your code and run again.';
+    case 'blocked':
+      statusEl.textContent = 'That vent panel is solid. Edit your code and run again.';
+      break;
+    case 'caught':
+      statusEl.textContent = 'The Scanner caught you. Edit your code and run again.';
       break;
     case 'error':
       statusEl.textContent = 'Error: ' + runner.errorMessage;
@@ -111,9 +130,9 @@ function insertSnippet(text) {
 
 function checkForNewlyTypedCommands() {
   const code = stripComments(editor.getValue());
-  let unlockedNow = Progress.getUnlockedSnippets();
   let changed = false;
   COMMANDS.forEach((cmd) => {
+    const unlockedNow = Progress.getUnlockedSnippets();
     if (!unlockedNow.includes(cmd.id) && cmd.pattern.test(code)) {
       Progress.unlockSnippet(cmd.id);
       changed = true;
@@ -124,7 +143,7 @@ function checkForNewlyTypedCommands() {
 
 function runCode() {
   const code = editor.getValue();
-  const { trace, success, error } = simulateSideScroller(LEVEL, code);
+  const { trace, success, error } = simulateGridMaze(LEVEL, code);
   runner.loadTrace(trace, success, error);
 }
 

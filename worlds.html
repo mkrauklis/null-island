@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>World Select — Null Island</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="hero" style="padding:2.5rem 1.5rem 1rem;">
+  <h1 style="font-size:2rem;">Null Island</h1>
+  <p>Pick a world. Locked worlds open once you've cleared the one before them.</p>
+</header>
+<div class="wrap">
+  <p style="text-align:center;"><a href="index.html">&larr; back to title</a></p>
+  <div id="world-grid" class="world-grid"></div>
+  <div class="settings-row">
+    <button class="button danger" id="reset-btn">Reset progress</button>
+  </div>
+</div>
+<script src="js/worlds-registry.js"></script>
+<script src="js/progress.js"></script>
+<script>
+function renderGrid() {
+  const gridEl = document.getElementById('world-grid');
+  gridEl.innerHTML = '';
+  WORLDS.forEach((world) => {
+    const unlocked = Progress.isUnlocked(world.id, WORLDS);
+    const state = Progress.getWorld(world.id);
+    const wrapper = document.createElement(unlocked && world.built ? 'a' : 'div');
+    wrapper.className = 'panel world-card' + (unlocked ? '' : ' locked');
+    if (unlocked && world.built) wrapper.href = world.path;
+
+    const h2 = document.createElement('h2');
+    h2.textContent = world.title;
+    wrapper.appendChild(h2);
+
+    const concept = document.createElement('div');
+    concept.className = 'concept';
+    concept.textContent = world.concept;
+    wrapper.appendChild(concept);
+
+    const status = document.createElement('div');
+    status.className = 'status-line';
+    if (!unlocked) {
+      status.textContent = 'Locked — clear the previous world first.';
+    } else if (!world.built) {
+      status.textContent = 'Unlocked — coming soon.';
+    } else if (!state.cleared) {
+      status.textContent = 'Not cleared yet.';
+    } else {
+      status.textContent = 'Cleared — click to replay.';
+    }
+    wrapper.appendChild(status);
+
+    if (unlocked && world.built && state.cleared) {
+      const score = document.createElement('div');
+      score.className = 'score-line';
+      const starred = world.parMoves !== null && state.bestMoves <= world.parMoves;
+      score.innerHTML = `Best: ${state.bestMoves} moves` +
+        (world.parMoves !== null ? ` (par ${world.parMoves})` : '') +
+        (starred ? ' <span class="star">&#9733;</span>' : '');
+      wrapper.appendChild(score);
+    }
+
+    gridEl.appendChild(wrapper);
+  });
+}
+
+document.getElementById('reset-btn').addEventListener('click', () => {
+  if (confirm('Reset all progress and best scores? This can\'t be undone.')) {
+    Progress.resetAll();
+    renderGrid();
+  }
+});
+
+renderGrid();
+</script>
+</body>
+</html>

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>World 1 — The Wreck — Null Island</title>
+<title>World 2 — The Vents — Null Island</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="../../css/style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
@@ -10,8 +10,8 @@
 </head>
 <body>
 <header class="hero" style="padding:2rem 1.5rem 1rem;">
-  <h1 style="font-size:1.8rem;">World 1 — The Wreck</h1>
-  <p>The ship is scrap. There's a gap in the hull plating ahead — you'll need to jump it. Write code to walk your character to the flag.</p>
+  <h1 style="font-size:1.8rem;">World 2 — The Vents</h1>
+  <p>A long vent shaft: right along the floor grate, then up through the riser to the exit. A Scanner patrols the floor — time your run, or wait it out.</p>
 </header>
 <div class="wrap">
   <p style="text-align:center;"><a href="../../worlds.html">&larr; back to World Select</a></p>
@@ -26,13 +26,17 @@
     </div>
     <div class="panel editor-panel">
       <h2>Your code</h2>
-      <textarea id="code">// Get to the flag. moveRight() walks one step.
-// jump() leaps two steps forward, clearing a gap.
-moveRight();
+      <textarea id="code">// You're 9 steps right and 5 steps up from the exit grate.
+// A Scanner patrols the floor ahead of you.
+// Typing every move by hand would take forever — try a for loop:
+// for (let i = 0; i < 3; i++) { moveRight(); }
 moveRight();
 </textarea>
       <div class="hint">
-        The flag is 11 steps from the start, with two gaps along the way.
+        Stay on the lit grate panels — that's the only surface here, the
+        rest is open shaft. Writing 9 individual moves is painful — that's
+        the point. A loop does it in one. <code>wait()</code> burns a turn
+        in place if you need to let the Scanner pass.
       </div>
       <div class="command-palette">
         <h3>Commands</h3>
@@ -46,6 +50,6 @@ moveRight();
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
 <script src="../../js/engine.js"></script>
 <script src="../../js/progress.js"></script>
-<script src="world1.js"></script>
+<script src="world2.js"></script>
 </body>
 </html>
