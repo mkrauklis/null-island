@@ -23,6 +23,8 @@
         <span id="status">Write your moves, then press Run.</span>
       </div>
       <div id="world-meta" class="world-meta"></div>
+      <div id="achievement-notice" class="world-meta"></div>
+      <a id="next-world-btn" class="button secondary next-world-btn"></a>
     </div>
     <div class="panel editor-panel">
       <h2>Your code</h2>
@@ -35,8 +37,11 @@ moveRight();
       <div class="hint">
         Stay on the lit grate panels — that's the only surface here, the
         rest is open shaft. Writing 9 individual moves is painful — that's
-        the point. A loop does it in one. <code>wait()</code> burns a turn
-        in place if you need to let the Scanner pass.
+        the point. A loop does it in one.<br><br>
+        The Scanner takes exactly one step every time <em>you</em> take a
+        step — including <code>wait()</code>. If it catches you, the fix
+        usually isn't a different path, it's changing <em>when</em> you
+        start moving: try adding a <code>wait()</code> before your loop.
       </div>
       <div class="command-palette">
         <h3>Commands</h3>
@@ -50,6 +55,8 @@ moveRight();
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
 <script src="../../js/engine.js"></script>
 <script src="../../js/progress.js"></script>
+<script src="../../js/worlds-registry.js"></script>
+<script src="../../js/achievements.js"></script>
 <script src="world2.js"></script>
 </body>
 </html>

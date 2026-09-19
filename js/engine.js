@@ -11,6 +11,37 @@
 const TILE_TYPE = { GROUND: 'ground', GAP: 'gap', GOAL: 'goal' };
 const MAX_STEPS = 300;
 
+// Reveals the "Next World" CTA on a win. Assumes the level-page convention
+// levels/<id>/index.html and that worlds-registry.js is loaded on the page.
+function renderNextWorldLink(worldId) {
+  const btn = document.getElementById('next-world-btn');
+  if (!btn || typeof WORLDS === 'undefined') return;
+  const index = WORLDS.findIndex((w) => w.id === worldId);
+  const next = WORLDS[index + 1];
+  if (next && next.built) {
+    btn.href = '../' + next.id + '/index.html';
+    btn.textContent = 'Next: ' + next.title + ' →';
+  } else {
+    btn.href = '../../worlds.html';
+    btn.textContent = next ? 'More worlds coming soon →' : 'Back to World Select →';
+  }
+  btn.classList.add('visible');
+}
+
+// Shows a small "new achievement" line for any ids in `newlyEarnedIds`.
+// Expects achievements.js's ACHIEVEMENTS catalog to be loaded.
+function announceAchievements(newlyEarnedIds) {
+  const el = document.getElementById('achievement-notice');
+  if (!el || !newlyEarnedIds.length || typeof ACHIEVEMENTS === 'undefined') return;
+  const names = newlyEarnedIds
+    .map((id) => ACHIEVEMENTS.find((a) => a.id === id))
+    .filter(Boolean)
+    .map((a) => `${a.icon} ${a.title}`);
+  if (names.length) {
+    el.innerHTML = 'New achievement: ' + names.join(', ');
+  }
+}
+
 // Strips // and /* */ comments before the command palette scans code for
 // "has the player typed this yet" — otherwise a command mentioned in the
 // level's own starter comment unlocks itself for free.

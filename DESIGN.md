@@ -74,6 +74,26 @@ globally (`Progress.unlockSnippet`), not per-world, so a command learned in
 one world stays unlocked in the next — the palette is there to save typing
 once you've proven you know the syntax, not to gate it.
 
+**Next-world CTA:** `renderNextWorldLink` (engine.js) shows a button on a
+win pointing at the next built world in `worlds-registry.js`, or back to
+World Select if the next one isn't built yet. Assumes the
+`levels/<id>/index.html` folder-naming convention.
+
+**Achievements (`js/achievements.js`):** a flat catalog of badges, stored
+globally and permanently in localStorage (`Progress.unlockAchievement`) —
+they don't reset per world, they're bragging rights across the whole save.
+Detection lives in each world's own script (it has the code text and the
+winning trace right there), checked once per win: `jumper`/`looper`/
+`patient`/`backtracker` scan the stripped code for the relevant syntax,
+`compass` checks the trace used all four directions, `perfectionist` checks
+the star, `escapee` (checked cross-world, from `worlds.html`) fires once
+every *built* world is cleared. Several of these are deliberately not
+achievable by the intended/optimal solution (e.g. World 2 never needs
+`moveLeft`/`moveDown` to clear it) — they're side quests for players who
+go looking, not a second scoring track. `worlds.html` renders the full
+catalog, showing `???` for anything not yet earned rather than spelling
+out what it takes.
+
 ## World progression
 
 ### World 1 — The Wreck (side-scroller, tutorial) — built
@@ -95,6 +115,18 @@ solution actually walks into it — clearing the level requires either
 reordering moves or spending a `wait()` to change timing, which is the
 point: the puzzle isn't solved by "loops exist," it's solved by noticing
 *when* the loop runs matters too.
+
+**Lesson learned from playtesting:** the math checks out (any odd number of
+`wait()`s at the very start clears it — one is enough), but the game gave
+zero feedback about *where* an attempt failed, so it read as unsolvable
+rather than as a puzzle. Fixed by (1) naming the exact tick and grid
+position in the fail message instead of a generic "caught you", and (2)
+stating the actual mechanic in the level text — "the Scanner takes one
+step every time you do, including `wait()`" — since that's the one fact
+the puzzle can't be solved without, and it wasn't written down anywhere.
+General principle for future worlds: a puzzle being *solvable* isn't the
+same as it being *debuggable* — always show the player enough state to
+know why an attempt failed, not just that it did.
 
 ### World 3 — The Dungeon Halls (mixed side-scroller/maze, 3 areas) — not built
 **Teaches:** conditionals.

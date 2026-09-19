@@ -270,3 +270,49 @@ header.hero p {
   color: var(--dim);
   font-size: 0.9rem;
 }
+
+/* Achievements */
+.achievement-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.achievement-badge {
+  text-align: center;
+  padding: 0.9rem 0.5rem;
+}
+
+.achievement-badge.locked {
+  opacity: 0.35;
+}
+
+.achievement-badge.earned {
+  border-color: var(--accent);
+}
+
+.achievement-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+  margin-bottom: 0.4rem;
+}
+
+.achievement-title {
+  font-size: 0.78rem;
+  color: var(--dim);
+}
+
+.achievement-badge.earned .achievement-title {
+  color: var(--ink);
+}
+
+/* Next-world CTA on a win */
+.next-world-btn {
+  margin-top: 0.75rem;
+  display: none;
+}
+
+.next-world-btn.visible {
+  display: inline-block;
+}

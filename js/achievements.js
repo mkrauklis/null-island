@@ -1,0 +1,22 @@
+// Badges. Each world's own script decides when to check these (it knows
+// what code/trace just won); this file is just the shared catalog plus,
+// for the cross-world ones, the check itself.
+const ACHIEVEMENTS = [
+  { id: 'jumper', title: 'Leap of Faith', icon: '\u{1F998}', description: 'Use jump() to clear a level.' },
+  { id: 'looper', title: 'Automator', icon: '\u{1F501}', description: 'Use a loop to clear a level.' },
+  { id: 'compass', title: 'Compass Rose', icon: '\u{1F9ED}', description: 'Use all four directions — up, down, left, right — in one clear.' },
+  { id: 'patient', title: 'Patience', icon: '\u{23F3}', description: 'Use wait() to clear a level.' },
+  { id: 'backtracker', title: 'Second Thoughts', icon: '\u{21A9}\u{FE0F}', description: 'Move backward and still reach the goal.' },
+  { id: 'perfectionist', title: 'Perfectionist', icon: '\u{2B50}', description: 'Clear a level in par — the fewest possible moves.' },
+  { id: 'escapee', title: 'Island Escapee', icon: '\u{1F3DD}\u{FE0F}', description: 'Clear every world currently on the island.' },
+];
+
+// Cross-world: call after any clear is recorded. Returns newly-earned ids.
+function checkEscapeeAchievement(worldsRegistry) {
+  const built = worldsRegistry.filter((w) => w.built);
+  const allCleared = built.every((w) => Progress.getWorld(w.id).cleared);
+  if (allCleared && built.length > 0) {
+    return Progress.unlockAchievement('escapee');
+  }
+  return { list: Progress.getAchievements(), isNew: false };
+}

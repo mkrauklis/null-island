@@ -59,7 +59,7 @@ function renderWorldMeta() {
   const el = document.getElementById('world-meta');
   const state = Progress.getWorld(WORLD_ID);
   if (!state.cleared) {
-    el.textContent = `Par: ${LEVEL.parMoves} moves.`;
+    el.textContent = `Par: ${LEVEL.parMoves} moves — the fewest moves anyone's found to clear this. Match it for a star.`;
     return;
   }
   const starred = state.bestMoves <= LEVEL.parMoves;
@@ -77,6 +77,8 @@ function renderStatus() {
     const updated = Progress.recordClear(WORLD_ID, moves);
     resultCache = { moves, bestMoves: updated.bestMoves, starred: updated.bestMoves <= LEVEL.parMoves };
     renderWorldMeta();
+    renderNextWorldLink(WORLD_ID);
+    checkAchievements();
   }
   lastStatus = runner.status;
 
@@ -86,12 +88,16 @@ function renderStatus() {
       statusEl.textContent = `Made it to the grate in ${r.moves} moves — best ${r.bestMoves}${r.starred ? ' ★' : ''} (par ${LEVEL.parMoves}).`;
       break;
     }
-    case 'blocked':
-      statusEl.textContent = 'That vent panel is solid. Edit your code and run again.';
+    case 'blocked': {
+      const last = runner.trace[runner.trace.length - 1];
+      statusEl.textContent = `Move ${last.tick}: that's not part of the grate — you hit a wall (row ${last.row}, col ${last.col}). Edit your code and run again.`;
       break;
-    case 'caught':
-      statusEl.textContent = 'The Scanner caught you. Edit your code and run again.';
+    }
+    case 'caught': {
+      const last = runner.trace[runner.trace.length - 1];
+      statusEl.textContent = `Move ${last.tick}: the Scanner caught you at (row ${last.row}, col ${last.col}). Try changing when you start moving, not just how — a wait() shifts your timing by one tick.`;
       break;
+    }
     case 'error':
       statusEl.textContent = 'Error: ' + runner.errorMessage;
       break;
@@ -139,6 +145,29 @@ function checkForNewlyTypedCommands() {
     }
   });
   if (changed) renderCommandPalette();
+}
+
+function checkAchievements() {
+  const code = stripComments(editor.getValue());
+  const newly = [];
+  const record = (id) => {
+    const { isNew } = Progress.unlockAchievement(id);
+    if (isNew) newly.push(id);
+  };
+
+  if (/for\s*\(|while\s*\(/.test(code)) record('looper');
+  if (/wait\s*\(/.test(code)) record('patient');
+  if (/moveLeft\s*\(/.test(code)) record('backtracker');
+  const actionsUsed = new Set(runner.trace.map((t) => t.action));
+  if (['moveUp', 'moveDown', 'moveLeft', 'moveRight'].every((a) => actionsUsed.has(a))) {
+    record('compass');
+  }
+  if (resultCache.starred) record('perfectionist');
+
+  const escapee = checkEscapeeAchievement(WORLDS);
+  if (escapee.isNew) newly.push('escapee');
+
+  announceAchievements(newly);
 }
 
 function runCode() {

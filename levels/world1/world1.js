@@ -43,7 +43,7 @@ function renderWorldMeta() {
   const el = document.getElementById('world-meta');
   const state = Progress.getWorld(WORLD_ID);
   if (!state.cleared) {
-    el.textContent = `Par: ${LEVEL.parMoves} moves.`;
+    el.textContent = `Par: ${LEVEL.parMoves} moves — the fewest moves anyone's found to clear this. Match it for a star.`;
     return;
   }
   const starred = state.bestMoves <= LEVEL.parMoves;
@@ -61,6 +61,8 @@ function renderStatus() {
     const updated = Progress.recordClear(WORLD_ID, moves);
     resultCache = { moves, bestMoves: updated.bestMoves, starred: updated.bestMoves <= LEVEL.parMoves };
     renderWorldMeta();
+    renderNextWorldLink(WORLD_ID);
+    checkAchievements();
   }
   lastStatus = runner.status;
 
@@ -120,6 +122,24 @@ function checkForNewlyTypedCommands() {
     }
   });
   if (changed) renderCommandPalette();
+}
+
+function checkAchievements() {
+  const code = stripComments(editor.getValue());
+  const newly = [];
+  const record = (id) => {
+    const { isNew } = Progress.unlockAchievement(id);
+    if (isNew) newly.push(id);
+  };
+
+  if (/jump\s*\(/.test(code)) record('jumper');
+  if (/moveLeft\s*\(/.test(code)) record('backtracker');
+  if (resultCache.starred) record('perfectionist');
+
+  const escapee = checkEscapeeAchievement(WORLDS);
+  if (escapee.isNew) newly.push('escapee');
+
+  announceAchievements(newly);
 }
 
 function runCode() {

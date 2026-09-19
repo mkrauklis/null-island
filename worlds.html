@@ -9,16 +9,23 @@
 <body>
 <header class="hero" style="padding:2.5rem 1.5rem 1rem;">
   <h1 style="font-size:2rem;">Null Island</h1>
-  <p>Pick a world. Locked worlds open once you've cleared the one before them.</p>
+  <p>Pick a world. Locked worlds open once you've cleared the one before them.
+  <strong>Par</strong> is the fewest moves anyone's found to clear a level —
+  match it and you earn a <span class="star">&#9733;</span>.</p>
 </header>
 <div class="wrap">
   <p style="text-align:center;"><a href="index.html">&larr; back to title</a></p>
   <div id="world-grid" class="world-grid"></div>
+
+  <h2 style="text-align:center; margin-top:2.5rem; font-size:1.1rem; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em;">Achievements</h2>
+  <div id="achievement-grid" class="achievement-grid"></div>
+
   <div class="settings-row">
     <button class="button danger" id="reset-btn">Reset progress</button>
   </div>
 </div>
 <script src="js/worlds-registry.js"></script>
+<script src="js/achievements.js"></script>
 <script src="js/progress.js"></script>
 <script>
 function renderGrid() {
@@ -67,14 +74,32 @@ function renderGrid() {
   });
 }
 
+function renderAchievements() {
+  const earned = Progress.getAchievements();
+  const gridEl = document.getElementById('achievement-grid');
+  gridEl.innerHTML = '';
+  ACHIEVEMENTS.forEach((a) => {
+    const has = earned.includes(a.id);
+    const card = document.createElement('div');
+    card.className = 'panel achievement-badge' + (has ? ' earned' : ' locked');
+    card.title = has ? a.description : '???  ' + a.description;
+    card.innerHTML = `<div class="achievement-icon">${a.icon}</div>
+      <div class="achievement-title">${has ? a.title : '???'}</div>`;
+    gridEl.appendChild(card);
+  });
+}
+
 document.getElementById('reset-btn').addEventListener('click', () => {
   if (confirm('Reset all progress and best scores? This can\'t be undone.')) {
     Progress.resetAll();
     renderGrid();
+    renderAchievements();
   }
 });
 
+checkEscapeeAchievement(WORLDS);
 renderGrid();
+renderAchievements();
 </script>
 </body>
 </html>

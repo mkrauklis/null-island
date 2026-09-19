@@ -6,6 +6,7 @@
 
 const PROGRESS_KEY = 'null-island:progress:v1';
 const SNIPPETS_KEY = 'null-island:snippets:v1';
+const ACHIEVEMENTS_KEY = 'null-island:achievements:v1';
 
 const Progress = {
   _load(key) {
@@ -59,10 +60,25 @@ const Progress = {
     return unlocked;
   },
 
+  getAchievements() {
+    return this._load(ACHIEVEMENTS_KEY) || [];
+  },
+
+  // Returns { list, isNew } — isNew is false if this id was already earned,
+  // so callers can show a "new achievement" notice only when it's actually new.
+  unlockAchievement(id) {
+    const earned = this.getAchievements();
+    if (earned.includes(id)) return { list: earned, isNew: false };
+    earned.push(id);
+    this._save(ACHIEVEMENTS_KEY, earned);
+    return { list: earned, isNew: true };
+  },
+
   resetAll() {
     try {
       localStorage.removeItem(PROGRESS_KEY);
       localStorage.removeItem(SNIPPETS_KEY);
+      localStorage.removeItem(ACHIEVEMENTS_KEY);
     } catch (e) {
       // ignore
     }
