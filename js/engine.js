@@ -669,18 +669,6 @@ function drawAccessory(p, s, accessory) {
     p.rect(-6 * s, -18 * s, 12 * s, 2.5 * s);
     p.fill(230, 195, 60);
     p.rect(-2 * s, -18.5 * s, 4 * s, 3.5 * s, 1);
-  } else if (accessory === 'cyclopsEye') {
-    // One big eye centered on the forehead, painted over wherever each
-    // skin's own (smaller) eyes are — an overlay, not a real substitution,
-    // same "drawn after body" trick every other accessory already uses.
-    p.fill(255, 255, 255);
-    p.circle(0, -10 * s, 9 * s);
-    p.fill(90, 200, 230);
-    p.circle(0, -10 * s, 5.5 * s);
-    p.fill(15, 15, 20);
-    p.circle(0, -10 * s, 2.8 * s);
-    p.fill(255, 255, 255, 180);
-    p.circle(-1.2 * s, -11.2 * s, 1.4 * s);
   } else if (accessory === 'torchHat') {
     const flicker = 0.6 + 0.4 * Math.sin((typeof window !== 'undefined' ? Date.now() : 0) * 0.012);
     p.fill(255, 140, 40, 45 * flicker);

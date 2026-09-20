@@ -73,6 +73,8 @@ let lastFrameMs;
 let lastStatus = null;
 let resultCache = null;
 let errorLine = null;
+let stepController;
+let stepping = false;
 
 function sketch(p) {
   p.setup = () => {
@@ -80,6 +82,12 @@ function sketch(p) {
     canvas.parent('level-canvas-holder');
     runner = new GridMazeRunner(p, LEVEL, { tile: 56, viewportW: 480, viewportH: 224, theme: 'foundry' });
     lastFrameMs = performance.now();
+    stepController = createStepController({
+      editor,
+      runner,
+      statusEl: document.getElementById('step-status'),
+      nextBtn: document.getElementById('step-next-btn'),
+    });
   };
 
   p.draw = () => {
@@ -109,6 +117,11 @@ function renderStatus() {
   if (!runner) return;
   statusEl.className = runner.status;
   syncCodeHighlight(editor, runner);
+
+  if (stepping && !runner.stepModeActive) {
+    stepping = false;
+    document.getElementById('step-controls').style.display = 'none';
+  }
 
   if (runner.status === 'won' && lastStatus !== 'won') {
     const moves = runner.trace.length - 1;
@@ -250,6 +263,24 @@ function runCode() {
   runner.loadTrace(trace, success, error);
 }
 
+// Step mode: same syntax check + simulate as Run, but hands the result to
+// the shared step controller (engine.js) instead of auto-playing it — one
+// click of Next advances one move OR one for-loop init/test/update phase.
+function stepCode() {
+  const code = editor.getValue();
+  clearSyntaxHighlight();
+  const syntaxErr = findSyntaxError(code);
+  if (syntaxErr) {
+    highlightSyntaxError(syntaxErr);
+    runner.loadTrace([{ row: LEVEL.start.row, col: LEVEL.start.col, event: 'start', tick: 0 }], false, syntaxErr.message);
+    return;
+  }
+  const result = simulateGridMaze(LEVEL, code);
+  stepping = true;
+  document.getElementById('step-controls').style.display = '';
+  stepController.start(result);
+}
+
 window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('level-hint').textContent =
     `Par is ${PAR} moves. There are three gaps in the catwalk, each needing the same detour — up, over, over, down.`;
@@ -268,5 +299,7 @@ window.addEventListener('DOMContentLoaded', () => {
   renderCommandPalette();
   renderWorldMeta();
   document.getElementById('run-btn').addEventListener('click', runCode);
+  document.getElementById('step-btn').addEventListener('click', stepCode);
+  document.getElementById('step-next-btn').addEventListener('click', () => stepController.next());
   new p5(sketch);
 });
