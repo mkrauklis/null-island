@@ -8,6 +8,8 @@ const RANKS = [
   { min: 7, title: 'Coded', color: [160, 160, 170] },
   { min: 10, title: 'Hacked', color: [161, 96, 204] },
   { min: 15, title: 'Webbed', color: [110, 200, 235] },
+  { min: 25, title: 'Networked', color: [230, 90, 150] },
+  { min: 50, title: 'Interwebbed', color: [224, 196, 90] },
 ];
 
 function computeRank() {
