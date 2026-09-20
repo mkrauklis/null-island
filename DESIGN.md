@@ -185,11 +185,30 @@ game's first real scare. The current MVP proves the chase mechanic works;
 the key-hunt/multi-area structure is the next pass on this world, not a
 replacement for it.
 
-### World 4 — The Foundry (mixed) — not built
+### World 4 — The Foundry — built
 **Teaches:** functions.
-Puzzles are now multi-step enough that inlining every move is unmanageable —
-the player starts writing their own named functions bundling move/jump/check
-patterns.
+A catwalk (`GridMazeRunner`, new `foundry` theme — rust-metal palette, no
+darkness pass) with three gaps in the floor plating, each needing the exact
+same four-move detour (up, over, over, down). Nothing enforces writing an
+actual `function` — same "teaches by fit, not force" choice already made for
+World 2's loops — but retyping the same four lines three times is annoying
+enough that the hint text and a starter-code comment both point at defining
+`passGap()` once and calling it three times instead. The `reuser` achievement
+(`js/achievements.js`) rewards it directly: a declared function called at
+least twice beyond its own declaration.
+
+No new engine mechanic was needed — `new Function(...)` already runs the
+player's code as a real JS function body, so nested `function` declarations
+and calls just work with the existing `simulateGridMaze`/`computeMinMovesGrid`
+from World 2. The layout itself isn't a generated maze (`generateMaze`) like
+World 2/3 — it's constructed directly (a 2-row grid: a floor row with the
+three gaps, a "detour lane" row that's only floor immediately around each
+gap), so it's connected by construction and doesn't need a BFS solvability
+check, only a par count. One side effect worth knowing: closely-spaced gaps'
+detour-lane clusters can merge into one longer upper corridor, letting the
+BFS-computed par undercut the "three separate identical detours" solution —
+not a bug, just means the naive intended solution isn't always the optimal
+one, same as it isn't in World 2 or 3.
 
 ### World 5 — The Vault (top-down maze, harder) — not built
 **Teaches:** arrays/objects.

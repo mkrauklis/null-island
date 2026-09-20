@@ -32,9 +32,9 @@ const WORLDS = [
     id: 'world4',
     title: 'The Foundry',
     concept: 'Functions',
-    path: null,
-    built: false,
-    parMoves: null,
+    path: 'levels/world4/index.html',
+    built: true,
+    parMoves: 18,
   },
   {
     id: 'world5',

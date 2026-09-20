@@ -1220,7 +1220,11 @@ class GridMazeRunner {
 
   draw() {
     const p = this.p;
-    p.background(this.theme === 'dungeon' ? this.p.color(14, 9, 8) : this.p.color(10, 14, 20));
+    p.background(
+      this.theme === 'dungeon' ? this.p.color(14, 9, 8) :
+      this.theme === 'foundry' ? this.p.color(20, 12, 7) :
+      this.p.color(10, 14, 20)
+    );
     p.push();
     p.translate(-Math.round(this.cameraX), -Math.round(this.cameraY));
     this._drawGrid();
@@ -1325,6 +1329,18 @@ class GridMazeRunner {
     const dist = this._distanceField();
     const isFloor = (r, c) => r >= 0 && r < rows && c >= 0 && c < cols && grid[r][c] !== 'wall';
     const dungeon = this.theme === 'dungeon';
+    const foundry = this.theme === 'foundry';
+
+    if (foundry) {
+      // Plain rust-metal backdrop with faint rivet seams — no brick lines,
+      // just enough texture to read as factory floor rather than void.
+      p.noStroke();
+      p.fill(16, 10, 6);
+      p.rect(0, 0, cols * this.tile, rows * this.tile);
+      p.stroke(30, 19, 11);
+      p.strokeWeight(1);
+      for (let x = 0; x < cols * this.tile; x += this.tile) p.line(x, 0, x, rows * this.tile);
+    }
 
     if (dungeon) {
       // Brick wall backdrop behind everything — void reads as stonework,
@@ -1355,6 +1371,8 @@ class GridMazeRunner {
         p.noStroke();
         if (dungeon) {
           p.fill(isGoal ? p.color(32, 58, 48) : p.color(42, 34, 28));
+        } else if (foundry) {
+          p.fill(isGoal ? p.color(32, 58, 48) : p.color(60, 40, 24));
         } else {
           p.fill(isGoal ? p.color(32, 58, 48) : p.color(46, 56, 76));
         }
@@ -1362,7 +1380,7 @@ class GridMazeRunner {
 
         // Perimeter glow: a bright edge everywhere the walkable floor meets
         // the void, so it's unmistakable which tiles you can stand on.
-        p.stroke(dungeon ? p.color(210, 130, 50, 160) : p.color(90, 200, 230, 170));
+        p.stroke(dungeon ? p.color(210, 130, 50, 160) : foundry ? p.color(255, 140, 50, 170) : p.color(90, 200, 230, 170));
         p.strokeWeight(2);
         if (!isFloor(r - 1, c)) p.line(x + 2, y + 1, x + this.tile - 2, y + 1);
         if (!isFloor(r + 1, c)) p.line(x + 2, y + this.tile - 1, x + this.tile - 2, y + this.tile - 1);
@@ -1388,6 +1406,11 @@ class GridMazeRunner {
             p.fill(255, 220, 120, 200);
             p.ellipse(cx, cy - 6 - flicker * 2, 3, 5 + flicker * 3);
           }
+        } else if (foundry) {
+          p.noStroke();
+          p.fill(20, 13, 8, 160);
+          p.circle(x + this.tile * 0.25, y + this.tile * 0.25, 3);
+          p.circle(x + this.tile * 0.75, y + this.tile * 0.75, 3);
         } else {
           p.noStroke();
           p.fill(12, 16, 22, 140);

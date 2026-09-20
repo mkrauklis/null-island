@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>World 4 — The Foundry — Null Island</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../../css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/acorn/8.11.3/acorn.min.js"></script>
+<style>
+  :root { --accent: #e08e3e; --accent-dim: #7a4c1f; }
+</style>
+</head>
+<body>
+<header class="hero" style="padding:2rem 1.5rem 1rem;">
+  <h1 style="font-size:1.8rem;">World 4 — The Foundry</h1>
+  <p>A catwalk over old machinery, broken by gaps the floor plates never
+  covered. Every gap needs the same detour — write it once, use it as many
+  times as you need.</p>
+</header>
+<div class="wrap">
+  <p style="text-align:center;"><a href="../../worlds.html">&larr; back to World Select</a></p>
+  <div class="world-layout">
+    <div class="panel">
+      <div id="level-canvas-holder"></div>
+      <div class="controls">
+        <button class="button" id="run-btn">Run</button>
+        <span id="status">Write your moves, then press Run.</span>
+      </div>
+      <div id="world-meta" class="world-meta"></div>
+      <div id="achievement-notice" class="world-meta"></div>
+      <a id="next-world-btn" class="button secondary next-world-btn"></a>
+    </div>
+    <div class="panel editor-panel">
+      <h2>Your code</h2>
+      <textarea id="code">// Every gap in the catwalk needs the exact same detour:
+// up, over, over, down. Instead of retyping that four times,
+// write it once as a function and call it wherever you need it:
+//
+// function passGap() {
+//   moveUp();
+//   moveRight();
+//   moveRight();
+//   moveDown();
+// }
+moveRight();
+</textarea>
+      <div class="hint" id="level-hint"></div>
+      <div class="hint">
+        A function is just a named block of moves — define it once with
+        <code>function name() { ... }</code>, then call <code>name();</code>
+        anywhere you'd otherwise retype the same lines.
+      </div>
+      <div class="command-palette">
+        <h3>Commands</h3>
+        <div id="command-list" class="command-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="../../js/engine.js"></script>
+<script src="../../js/progress.js"></script>
+<script src="../../js/worlds-registry.js"></script>
+<script src="../../js/achievements.js"></script>
+<script src="world4.js"></script>
+</body>
+</html>
