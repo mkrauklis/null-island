@@ -245,6 +245,7 @@ function drawCharacter(p, tile, opts = {}) {
   if (skin === 'gorilla') drawGorillaBody(p, s, fr, fg, fb, legSwing);
   else if (skin === 'manatee') drawManateeBody(p, s, fr, fg, fb, legSwing);
   else if (skin === 'proboscis') drawProboscisBody(p, s, fr, fg, fb, legSwing);
+  else if (skin === 'spiderMonkey') drawSpiderMonkeyBody(p, s, fr, fg, fb, legSwing);
   else drawCapuchinBody(p, s, fr, fg, fb, legSwing);
 
   drawAccessory(p, s, accessory);
@@ -430,6 +431,54 @@ function drawProboscisBody(p, s, fr, fg, fb, legSwing) {
   // the signature giant nose
   p.fill(225, 160, 150);
   p.ellipse(0, -2 * s, 6 * s, 13 * s);
+}
+
+function drawSpiderMonkeyBody(p, s, fr, fg, fb, legSwing) {
+  // long prehensile tail, curled at the tip
+  p.noFill();
+  p.stroke(fr, fg, fb);
+  p.strokeWeight(2.2 * s);
+  p.beginShape();
+  p.curveVertex(6 * s, 6 * s);
+  p.curveVertex(6 * s, 6 * s);
+  p.curveVertex(15 * s, 2 * s);
+  p.curveVertex(17 * s, -6 * s);
+  p.curveVertex(12 * s, -11 * s);
+  p.curveVertex(7 * s, -9 * s);
+  p.curveVertex(7 * s, -9 * s);
+  p.endShape();
+
+  // long thin legs — spider monkeys are built for reach, not bulk
+  p.stroke(fr * 0.65, fg * 0.65, fb * 0.65);
+  p.strokeWeight(2.3 * s);
+  p.line(-4 * s, 8 * s, -7 * s + legSwing * 0.5, 20 * s);
+  p.line(4 * s, 8 * s, 7 * s - legSwing * 0.5, 20 * s);
+
+  // long thin arms
+  p.stroke(fr, fg, fb);
+  p.strokeWeight(2.3 * s);
+  p.line(-7 * s, 0, -13 * s, 11 * s);
+  p.line(7 * s, 0, 13 * s, 11 * s);
+
+  // slender body
+  p.noStroke();
+  p.fill(fr, fg, fb);
+  p.ellipse(0, 3 * s, 12 * s, 15 * s);
+
+  // small round head, no visible ears
+  p.circle(0, -10 * s, 13 * s);
+
+  // bare dark face (spider monkeys have distinctive black faces)
+  p.fill(45, 38, 40);
+  p.ellipse(0, -9 * s, 9 * s, 8 * s);
+
+  // eyes
+  p.fill(255, 255, 255, 220);
+  p.circle(-2.5 * s, -10 * s, 2 * s);
+  p.circle(2.5 * s, -10 * s, 2 * s);
+  p.fill(20, 15, 15);
+  p.circle(-2.5 * s, -10 * s, 1 * s);
+  p.circle(2.5 * s, -10 * s, 1 * s);
 }
 
 function drawAccessory(p, s, accessory) {
