@@ -230,7 +230,8 @@ a single draw pass.
 
 ## Rank
 
-`js/ranks.js` computes a title (Castaway → ... → Island Escapee) from a
+`js/ranks.js` computes a title (Beginner → Learner → Technician → Coded →
+Hacked → Webbed) from a
 score derived from Progress every time it's shown — worlds cleared (10 pts),
 stars earned (5 pts), achievements unlocked (3 pts each) — rather than being
 stored anywhere, so it can't drift out of sync with the save data it's

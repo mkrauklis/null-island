@@ -2,12 +2,12 @@
 // stars earned, achievements unlocked), not stored — always recomputed
 // from Progress so it can never drift out of sync with the save data.
 const RANKS = [
-  { min: 0, title: 'Castaway' },
-  { min: 16, title: 'Wreck Diver' },
-  { min: 31, title: 'Vent Runner' },
-  { min: 46, title: 'Dungeon Ranger' },
-  { min: 61, title: 'Code Breaker' },
-  { min: 80, title: 'Island Escapee' },
+  { min: 0, title: 'Beginner' },
+  { min: 16, title: 'Learner' },
+  { min: 31, title: 'Technician' },
+  { min: 46, title: 'Coded' },
+  { min: 61, title: 'Hacked' },
+  { min: 80, title: 'Webbed' },
 ];
 
 function computeRankScore(worldsRegistry) {
