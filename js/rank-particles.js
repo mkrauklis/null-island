@@ -1,9 +1,18 @@
 // A small canvas overlay that drifts colored sparks up around the rank
-// badge for the top three ranks (Webbed, Networked, Interwebbed) — a visual
-// reward for the ranks that take multiple full playthroughs to reach.
-// Vanilla canvas, not p5: worlds.html doesn't otherwise load p5.js and this
-// doesn't need a simulated/replayed trace, just a live decorative loop.
-const PARTICLE_RANKS = new Set(['Webbed', 'Networked', 'Interwebbed']);
+// badge for the top-tier ranks — a visual reward for the ranks that take
+// multiple full playthroughs to reach. Vanilla canvas, not p5: worlds.html
+// doesn't otherwise load p5.js and this doesn't need a simulated/replayed
+// trace, just a live decorative loop.
+//
+// Intensity escalates with rank so the highest tiers visibly outshine the
+// earlier sparkly ones rather than just swapping color.
+const PARTICLE_INTENSITY = {
+  Webbed: 1,
+  Networked: 2,
+  Interwebbed: 3,
+  Darkwebbed: 4,
+  'Code Ascendant': 5,
+};
 const PARTICLE_MARGIN = 24;
 
 let particleState = null;
@@ -35,9 +44,7 @@ function startRankParticles(title, color) {
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
 
-  // Interwebbed and Networked get denser sparks than Webbed — a small extra
-  // sense of escalation between the three, not just a color swap.
-  const intensity = title === 'Interwebbed' ? 3 : title === 'Networked' ? 2 : 1;
+  const intensity = PARTICLE_INTENSITY[title] || 1;
   const spawnInterval = 0.16 / intensity;
   const particles = [];
   const [r, g, b] = color;
@@ -91,7 +98,7 @@ function startRankParticles(title, color) {
 // Called every time the rank badge re-renders. Starts/restarts/stops the
 // effect as needed, cheap to call even when nothing changes.
 function updateRankParticles(rank) {
-  if (!PARTICLE_RANKS.has(rank.title)) {
+  if (!(rank.title in PARTICLE_INTENSITY)) {
     stopRankParticles();
     return;
   }

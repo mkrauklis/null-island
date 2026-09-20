@@ -10,6 +10,8 @@ const RANKS = [
   { min: 15, title: 'Webbed', color: [110, 200, 235] },
   { min: 25, title: 'Networked', color: [230, 90, 150] },
   { min: 50, title: 'Interwebbed', color: [224, 196, 90] },
+  { min: 100, title: 'Darkwebbed', color: [90, 45, 145] },
+  { min: 250, title: 'Code Ascendant', color: [240, 245, 255] },
 ];
 
 function computeRank() {
