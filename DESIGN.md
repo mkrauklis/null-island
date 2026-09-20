@@ -228,14 +228,26 @@ hats draw after (on top of an already-drawn head) — the two accessory
 categories need opposite z-order and there was no getting around that with
 a single draw pass.
 
-## Rank
+## Wins, rank, and the re-lock loop
 
-`js/ranks.js` computes a title (Beginner → Learner → Technician → Coded →
-Hacked → Webbed) from a
-score derived from Progress every time it's shown — worlds cleared (10 pts),
-stars earned (5 pts), achievements unlocked (3 pts each) — rather than being
-stored anywhere, so it can't drift out of sync with the save data it's
-summarizing. Shown on World Select only, since that's the progress hub.
+A **win** means every world (all 6 — currently a no-op until World 6 ships,
+since it can never be true with only 3 built) is cleared at once.
+`Progress.checkForWin(WORLDS)`, called after every clear from each world's
+own script, checks that; when it's true it increments a stored win count
+and wipes `PROGRESS_KEY` entirely — every world's `cleared`/`bestMoves`/
+`parMoves` resets, re-locking the whole game back to World 1. Seeds,
+achievements, unlocked command-palette snippets, and character
+customization are untouched — only the lock/clear state resets, so a
+completed run becomes a fresh one rather than a wiped save. This is
+deliberately a *different*, softer reset than the "Reset progress" button
+on World Select, which still wipes everything including the win count.
+
+`js/ranks.js` maps win count directly to a title — Beginner (0) → Learner
+(3) → Technician (5) → Coded (7) → Hacked (10) → Webbed (15) — recomputed
+from `Progress.getWins()` every time it's shown rather than stored
+separately, so it can't drift out of sync. Each rank is a multiple of full
+playthroughs, not incremental score — the tiers are deliberately far apart
+since a "win" is the whole game, not a single level.
 
 ## World 3 lighting
 

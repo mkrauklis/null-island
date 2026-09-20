@@ -9,6 +9,7 @@ const SNIPPETS_KEY = 'null-island:snippets:v1';
 const ACHIEVEMENTS_KEY = 'null-island:achievements:v1';
 const SEEDS_KEY = 'null-island:seeds:v1';
 const CHARACTER_KEY = 'null-island:character:v1';
+const WINS_KEY = 'null-island:wins:v1';
 
 const Progress = {
   _load(key) {
@@ -114,12 +115,32 @@ const Progress = {
     this._save(CHARACTER_KEY, character);
   },
 
+  getWins() {
+    return this._load(WINS_KEY) || 0;
+  },
+
+  // Call after recording any clear. A "win" means every world (all 6,
+  // whether built yet or not — this is a no-op until World 6 ships) is
+  // cleared. When that happens: count the win, then wipe every world's
+  // cleared/bestMoves/par so the game re-locks back to World 1 for a fresh
+  // run. Seeds, achievements, unlocked snippets, and character
+  // customization are untouched — only the lock/clear state resets.
+  checkForWin(worldsInOrder) {
+    const allCleared = worldsInOrder.every((w) => this.getWorld(w.id).cleared);
+    if (!allCleared) return { won: false };
+    const wins = this.getWins() + 1;
+    this._save(WINS_KEY, wins);
+    this._save(PROGRESS_KEY, {});
+    return { won: true, wins };
+  },
+
   resetAll() {
     try {
       localStorage.removeItem(PROGRESS_KEY);
       localStorage.removeItem(SNIPPETS_KEY);
       localStorage.removeItem(ACHIEVEMENTS_KEY);
       localStorage.removeItem(SEEDS_KEY);
+      localStorage.removeItem(WINS_KEY);
     } catch (e) {
       // ignore
     }

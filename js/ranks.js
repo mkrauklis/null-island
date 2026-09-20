@@ -1,35 +1,21 @@
-// Player rank: a title computed from overall progress (worlds cleared,
-// stars earned, achievements unlocked), not stored — always recomputed
-// from Progress so it can never drift out of sync with the save data.
+// Player rank: a title based on how many times the whole game (all 6
+// worlds) has been cleared — see Progress.checkForWin. Wins, not points:
+// each rank up is one full playthrough, not incremental score.
 const RANKS = [
   { min: 0, title: 'Beginner' },
-  { min: 16, title: 'Learner' },
-  { min: 31, title: 'Technician' },
-  { min: 46, title: 'Coded' },
-  { min: 61, title: 'Hacked' },
-  { min: 80, title: 'Webbed' },
+  { min: 3, title: 'Learner' },
+  { min: 5, title: 'Technician' },
+  { min: 7, title: 'Coded' },
+  { min: 10, title: 'Hacked' },
+  { min: 15, title: 'Webbed' },
 ];
 
-function computeRankScore(worldsRegistry) {
-  let score = 0;
-  worldsRegistry.forEach((w) => {
-    if (!w.built) return;
-    const state = Progress.getWorld(w.id);
-    if (!state.cleared) return;
-    score += 10;
-    const par = state.parMoves !== null && state.parMoves !== undefined ? state.parMoves : w.parMoves;
-    if (par !== null && state.bestMoves <= par) score += 5;
-  });
-  score += Progress.getAchievements().length * 3;
-  return score;
-}
-
-function computeRank(worldsRegistry) {
-  const score = computeRankScore(worldsRegistry);
+function computeRank() {
+  const wins = Progress.getWins();
   let rank = RANKS[0];
   for (const r of RANKS) {
-    if (score >= r.min) rank = r;
+    if (wins >= r.min) rank = r;
   }
-  const next = RANKS.find((r) => r.min > score);
-  return { title: rank.title, score, next: next ? { title: next.title, pointsAway: next.min - score } : null };
+  const next = RANKS.find((r) => r.min > wins);
+  return { title: rank.title, wins, next: next ? { title: next.title, winsAway: next.min - wins } : null };
 }

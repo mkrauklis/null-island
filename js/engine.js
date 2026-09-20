@@ -87,6 +87,23 @@ function announceAchievements(newlyEarnedIds) {
   }
 }
 
+// Call after recording a clear. If that was the last of all 6 worlds,
+// Progress.checkForWin counts the win and wipes every world's lock/clear
+// state for a fresh run — this just surfaces that moment to the player,
+// appended alongside any achievement notice rather than replacing it.
+function checkGameWinAndAnnounce() {
+  if (typeof WORLDS === 'undefined' || !Progress.checkForWin) return { won: false };
+  const result = Progress.checkForWin(WORLDS);
+  if (result.won) {
+    const el = document.getElementById('achievement-notice');
+    if (el) {
+      const winMsg = `\u{1F3C6} You beat Null Island! Win #${result.wins} — every world is locked again for a fresh run.`;
+      el.innerHTML = el.innerHTML ? el.innerHTML + '<br>' + winMsg : winMsg;
+    }
+  }
+  return result;
+}
+
 // Strips // and /* */ comments before the command palette scans code for
 // "has the player typed this yet" — otherwise a command mentioned in the
 // level's own starter comment unlocks itself for free.
