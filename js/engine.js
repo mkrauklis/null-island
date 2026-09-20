@@ -607,49 +607,79 @@ function drawKoiBody(p, s, fr, fg, fb, legSwing) {
   p.push();
   p.rotate(wobble);
 
-  // pectoral fins + a big flowing tail fan instead of legs
+  // long, translucent flowing pectoral fins + a big forked tail fin with
+  // visible rays — the trailing fins that read as "koi" at a glance
   p.noStroke();
-  p.fill(fr * 0.75, fg * 0.75, fb * 0.75, 220);
-  p.ellipse(-10 * s, 4 * s, 8 * s, 5 * s);
-  p.ellipse(10 * s, 4 * s, 8 * s, 5 * s);
+  p.fill(255, 255, 255, 90);
+  p.ellipse(-11 * s, 3 * s, 10 * s, 5 * s);
+  p.ellipse(11 * s, 3 * s, 10 * s, 5 * s);
+  p.fill(255, 255, 255, 130);
   p.beginShape();
-  p.vertex(-8 * s, 12 * s);
-  p.vertex(-14 * s, 26 * s);
-  p.vertex(0, 16 * s);
-  p.vertex(14 * s, 26 * s);
-  p.vertex(8 * s, 12 * s);
+  p.vertex(-6 * s, 13 * s);
+  p.vertex(-16 * s, 30 * s);
+  p.vertex(-4 * s, 21 * s);
+  p.vertex(0, 30 * s);
+  p.vertex(4 * s, 21 * s);
+  p.vertex(16 * s, 30 * s);
+  p.vertex(6 * s, 13 * s);
+  p.endShape(p.CLOSE);
+  p.stroke(220, 220, 220, 150);
+  p.strokeWeight(0.6 * s);
+  for (let i = -2; i <= 2; i++) p.line(i * 2.2 * s, 15 * s, i * 5 * s, 28 * s);
+  p.noStroke();
+
+  // long cylindrical body — pale/white base is the koi's signature, not
+  // the flat fur color (that instead drives the patches below)
+  p.fill(250, 248, 240);
+  p.ellipse(0, -1 * s, 15 * s, 26 * s);
+
+  // long, low dorsal fin ridge running down the spine
+  p.fill(255, 255, 255, 200);
+  p.beginShape();
+  p.vertex(-2 * s, 2 * s);
+  p.vertex(0, -10 * s);
+  p.vertex(3 * s, 3 * s);
   p.endShape(p.CLOSE);
 
-  // long, sleek body
+  // bold kohaku-style color patches in the player's chosen color
   p.fill(fr, fg, fb);
-  p.ellipse(0, -1 * s, 17 * s, 24 * s);
+  p.ellipse(-2 * s, -8 * s, 9 * s, 8 * s);
+  p.ellipse(3 * s, 1 * s, 10 * s, 9 * s);
+  p.ellipse(-3 * s, 9 * s, 8 * s, 7 * s);
 
-  // dorsal fin ridge along the back
-  p.fill(fr * 0.8, fg * 0.8, fb * 0.8, 220);
-  p.triangle(-3 * s, -2 * s, 0, -9 * s, 4 * s, -1 * s);
+  // black sumi accent markings
+  p.fill(25, 22, 22, 200);
+  p.ellipse(4 * s, -4 * s, 4 * s, 3 * s);
+  p.ellipse(-4 * s, 4 * s, 3.5 * s, 3 * s);
 
-  // rounded head
-  p.fill(fr * 0.95, fg * 0.95, fb * 0.95);
-  p.ellipse(0, -11 * s, 13 * s, 12 * s);
+  // rounded head, blunt snout
+  p.fill(250, 248, 240);
+  p.ellipse(0, -12 * s, 12 * s, 11 * s);
 
-  // calico patches — koi are known for blotchy white/black markings
-  // layered over whatever base color the player picked
-  p.fill(255, 255, 255, 160);
-  p.ellipse(-3 * s, 3 * s, 8 * s, 6 * s);
-  p.fill(20, 20, 20, 130);
-  p.ellipse(4 * s, -6 * s, 6 * s, 5 * s);
-
-  // short barbels near the mouth
-  p.stroke(fr * 0.6, fg * 0.6, fb * 0.6);
+  // trailing whisker barbels from the corners of the mouth
+  p.stroke(240, 235, 220);
   p.strokeWeight(1 * s);
-  p.line(-3 * s, -6 * s, -5 * s, -2 * s);
-  p.line(3 * s, -6 * s, 5 * s, -2 * s);
+  p.noFill();
+  [-1, 1].forEach((side) => {
+    p.beginShape();
+    p.curveVertex(side * 4 * s, -8 * s);
+    p.curveVertex(side * 4 * s, -8 * s);
+    p.curveVertex(side * 6 * s, -4 * s);
+    p.curveVertex(side * 6 * s, 0 * s);
+    p.curveVertex(side * 6 * s, 0 * s);
+    p.endShape();
+  });
+
+  // small downward pucker mouth
+  p.stroke(90, 60, 55);
+  p.strokeWeight(1 * s);
+  p.arc(0, -7 * s, 3 * s, 2 * s, 0, Math.PI);
 
   // round eyes
   p.noStroke();
   p.fill(20, 15, 12);
-  p.circle(-4 * s, -13 * s, 2 * s);
-  p.circle(4 * s, -13 * s, 2 * s);
+  p.circle(-4 * s, -14 * s, 2 * s);
+  p.circle(4 * s, -14 * s, 2 * s);
   p.pop();
 }
 
