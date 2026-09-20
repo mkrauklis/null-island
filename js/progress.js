@@ -102,7 +102,12 @@ const Progress = {
   },
 
   getCharacter() {
-    return this._load(CHARACTER_KEY) || { color: 'orange', accessory: 'none' };
+    const saved = this._load(CHARACTER_KEY) || {};
+    return {
+      color: saved.color || 'orange',
+      accessory: saved.accessory || 'none',
+      skin: saved.skin || 'capuchin',
+    };
   },
 
   setCharacter(character) {

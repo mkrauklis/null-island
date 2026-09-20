@@ -12,6 +12,7 @@
   <p>Pick a world. Locked worlds open once you've cleared the one before them.
   <strong>Par</strong> is the fewest moves anyone's found to clear a level —
   match it and you earn a <span class="star">&#9733;</span>.</p>
+  <div id="rank-badge" class="rank-badge"></div>
 </header>
 <div class="wrap">
   <p style="text-align:center;"><a href="index.html">&larr; back to title</a></p>
@@ -26,8 +27,16 @@
 </div>
 <script src="js/worlds-registry.js"></script>
 <script src="js/achievements.js"></script>
+<script src="js/ranks.js"></script>
 <script src="js/progress.js"></script>
 <script>
+function renderRank() {
+  const el = document.getElementById('rank-badge');
+  const rank = computeRank(WORLDS);
+  el.innerHTML = `Rank: <strong>${rank.title}</strong> (${rank.score} pts)` +
+    (rank.next ? ` — ${rank.next.pointsAway} pts to ${rank.next.title}` : ' — max rank');
+}
+
 function renderGrid() {
   const gridEl = document.getElementById('world-grid');
   gridEl.innerHTML = '';
@@ -95,12 +104,14 @@ document.getElementById('reset-btn').addEventListener('click', () => {
     Progress.resetAll();
     renderGrid();
     renderAchievements();
+    renderRank();
   }
 });
 
 checkEscapeeAchievement(WORLDS);
 renderGrid();
 renderAchievements();
+renderRank();
 </script>
 </body>
 </html>

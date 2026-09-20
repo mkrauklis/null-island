@@ -194,10 +194,11 @@ function hash01(n) {
   return x - Math.floor(x);
 }
 
-// The player character: a capuchin, customizable from the splash screen
-// (Progress.getCharacter) and drawn identically everywhere it appears —
-// the splash preview and both runners all call this one function, so a
-// choice made once shows up consistently in every world.
+// The player character: customizable species ("skin"), color, and one
+// cosmetic, from the splash screen (Progress.getCharacter). Drawn
+// identically everywhere it appears — the splash preview and both runners
+// all call this one function, so a choice made once shows up consistently
+// in every world.
 const CHARACTER_COLORS = {
   red: [214, 69, 69],
   orange: [224, 142, 62],
@@ -209,14 +210,42 @@ const CHARACTER_COLORS = {
   white: [232, 232, 232],
 };
 
-function drawCapuchin(p, tile, opts = {}) {
-  const character = (typeof Progress !== 'undefined' && Progress.getCharacter) ? Progress.getCharacter() : { color: 'orange', accessory: 'none' };
+function drawCharacter(p, tile, opts = {}) {
+  const fallback = { color: 'orange', accessory: 'none', skin: 'capuchin' };
+  const character = (typeof Progress !== 'undefined' && Progress.getCharacter) ? Progress.getCharacter() : fallback;
   const color = opts.color || character.color || 'orange';
   const accessory = opts.accessory !== undefined ? opts.accessory : character.accessory;
+  const skin = opts.skin || character.skin || 'capuchin';
   const [fr, fg, fb] = CHARACTER_COLORS[color] || CHARACTER_COLORS.orange;
   const s = tile / 48;
   const legSwing = opts.legSwing || 0;
 
+  // Wings sprout from the back, so they need to be drawn before the body
+  // (behind it), unlike hats which sit on top of an already-drawn head.
+  if (accessory === 'wings') drawWings(p, s);
+
+  if (skin === 'gorilla') drawGorillaBody(p, s, fr, fg, fb, legSwing);
+  else if (skin === 'manatee') drawManateeBody(p, s, fr, fg, fb, legSwing);
+  else if (skin === 'proboscis') drawProboscisBody(p, s, fr, fg, fb, legSwing);
+  else drawCapuchinBody(p, s, fr, fg, fb, legSwing);
+
+  drawAccessory(p, s, accessory);
+}
+
+function drawWings(p, s) {
+  p.noStroke();
+  p.fill(255, 255, 255, 235);
+  [-1, 1].forEach((side) => {
+    p.push();
+    p.translate(side * 9 * s, 1 * s);
+    p.rotate(side * -0.5);
+    p.ellipse(0, 0, 8 * s, 19 * s);
+    p.ellipse(0, 5 * s, 6 * s, 11 * s);
+    p.pop();
+  });
+}
+
+function drawCapuchinBody(p, s, fr, fg, fb, legSwing) {
   // tail
   p.noFill();
   p.stroke(fr, fg, fb);
@@ -264,8 +293,125 @@ function drawCapuchin(p, tile, opts = {}) {
   p.stroke(35, 24, 18);
   p.strokeWeight(1.2 * s);
   p.arc(0, -4 * s, 4 * s, 3 * s, 0, Math.PI);
+}
 
-  drawAccessory(p, s, accessory);
+function drawGorillaBody(p, s, fr, fg, fb, legSwing) {
+  // legs: short and thick
+  p.stroke(fr * 0.6, fg * 0.6, fb * 0.6);
+  p.strokeWeight(5 * s);
+  p.line(-5 * s, 9 * s, -5 * s + legSwing * 0.3, 16 * s);
+  p.line(5 * s, 9 * s, 5 * s - legSwing * 0.3, 16 * s);
+
+  // arms: long, thick, hanging low — the gorilla silhouette
+  p.stroke(fr, fg, fb);
+  p.strokeWeight(5 * s);
+  p.line(-10 * s, -2 * s, -13 * s, 13 * s);
+  p.line(10 * s, -2 * s, 13 * s, 13 * s);
+
+  // barrel chest
+  p.noStroke();
+  p.fill(fr, fg, fb);
+  p.ellipse(0, 2 * s, 22 * s, 18 * s);
+
+  // small ears close to a big head
+  p.circle(-9 * s, -10 * s, 5 * s);
+  p.circle(9 * s, -10 * s, 5 * s);
+  p.fill(fr * 0.9, fg * 0.9, fb * 0.9);
+  p.ellipse(0, -11 * s, 19 * s, 16 * s);
+
+  // flat dark face + brow ridge
+  p.fill(40, 32, 30);
+  p.ellipse(0, -8 * s, 12 * s, 10 * s);
+  p.fill(fr * 0.7, fg * 0.7, fb * 0.7);
+  p.rect(-6 * s, -14 * s, 12 * s, 3 * s, 2);
+
+  p.fill(20, 15, 12);
+  p.circle(-3 * s, -9 * s, 2 * s);
+  p.circle(3 * s, -9 * s, 2 * s);
+}
+
+function drawManateeBody(p, s, fr, fg, fb, legSwing) {
+  const wobble = legSwing * 0.015;
+  p.push();
+  p.rotate(wobble);
+
+  // flippers + tail fluke instead of legs
+  p.noStroke();
+  p.fill(fr * 0.75, fg * 0.75, fb * 0.75);
+  p.ellipse(-13 * s, 6 * s, 10 * s, 6 * s);
+  p.ellipse(13 * s, 6 * s, 10 * s, 6 * s);
+  p.ellipse(0, 15 * s, 18 * s, 7 * s);
+
+  // big rounded blob body — no neck, no ears
+  p.fill(fr, fg, fb);
+  p.ellipse(0, -1 * s, 26 * s, 23 * s);
+
+  // snout
+  p.fill(fr * 0.9, fg * 0.9, fb * 0.9);
+  p.ellipse(0, -10 * s, 15 * s, 11 * s);
+
+  // whiskers
+  p.stroke(0, 0, 0, 90);
+  p.strokeWeight(1 * s);
+  [[-6, -8], [-7, -6], [6, -8], [7, -6]].forEach(([dx, dy]) => {
+    p.line(dx * s, dy * s, dx * s + (dx > 0 ? 4 * s : -4 * s), dy * s + 1 * s);
+  });
+
+  // small eyes, nostrils
+  p.noStroke();
+  p.fill(20, 15, 12);
+  p.circle(-4 * s, -11 * s, 1.8 * s);
+  p.circle(4 * s, -11 * s, 1.8 * s);
+  p.fill(fr * 0.6, fg * 0.6, fb * 0.6);
+  p.circle(-2 * s, -15 * s, 1.5 * s);
+  p.circle(2 * s, -15 * s, 1.5 * s);
+  p.pop();
+}
+
+function drawProboscisBody(p, s, fr, fg, fb, legSwing) {
+  // tail
+  p.noFill();
+  p.stroke(fr, fg, fb);
+  p.strokeWeight(2.5 * s);
+  p.beginShape();
+  p.curveVertex(6 * s, 8 * s);
+  p.curveVertex(6 * s, 8 * s);
+  p.curveVertex(13 * s, 3 * s);
+  p.curveVertex(13 * s, -5 * s);
+  p.curveVertex(8 * s, -9 * s);
+  p.curveVertex(8 * s, -9 * s);
+  p.endShape();
+
+  // legs + arms
+  p.stroke(fr * 0.65, fg * 0.65, fb * 0.65);
+  p.strokeWeight(3 * s);
+  p.line(-4 * s, 10 * s, -4 * s + legSwing * 0.4, 18 * s);
+  p.line(4 * s, 10 * s, 4 * s - legSwing * 0.4, 18 * s);
+  p.stroke(fr, fg, fb);
+  p.line(-8 * s, 3 * s, -11 * s, 10 * s);
+  p.line(8 * s, 3 * s, 11 * s, 10 * s);
+
+  // potbelly
+  p.noStroke();
+  p.fill(fr, fg, fb);
+  p.ellipse(0, 5 * s, 18 * s, 19 * s);
+
+  // head + small ears
+  p.circle(-8 * s, -10 * s, 4 * s);
+  p.circle(8 * s, -10 * s, 4 * s);
+  p.circle(0, -10 * s, 16 * s);
+
+  // face patch
+  p.fill(230, 205, 190);
+  p.ellipse(0, -7 * s, 12 * s, 10 * s);
+
+  p.fill(35, 24, 18);
+  p.circle(-4 * s, -10 * s, 2 * s);
+  p.circle(4 * s, -10 * s, 2 * s);
+
+  // the signature giant nose
+  p.fill(225, 160, 150);
+  p.ellipse(0, -2 * s, 6 * s, 13 * s);
 }
 
 function drawAccessory(p, s, accessory) {
@@ -284,16 +430,44 @@ function drawAccessory(p, s, accessory) {
     p.rect(-10 * s, -17 * s, 20 * s, 3 * s, 1);
     p.fill(180, 40, 60);
     p.rect(-7 * s, -19 * s, 14 * s, 2.5 * s);
-  } else if (accessory === 'wings') {
-    p.fill(255, 255, 255, 235);
-    [-1, 1].forEach((side) => {
+  } else if (accessory === 'torchHat') {
+    const flicker = 0.6 + 0.4 * Math.sin((typeof window !== 'undefined' ? Date.now() : 0) * 0.012);
+    p.fill(255, 140, 40, 45 * flicker);
+    p.circle(0, -24 * s, 15 * s * flicker);
+    p.fill(90, 60, 30);
+    p.rect(-2 * s, -26 * s, 4 * s, 11 * s, 1);
+    p.fill(255, 170, 60, 220);
+    p.ellipse(0, -30 * s - flicker * 2, 6 * s, 10 * s + flicker * 6);
+    p.fill(255, 220, 120, 200);
+    p.ellipse(0, -30 * s - flicker * 2, 3 * s, 5 * s + flicker * 3);
+  } else if (accessory === 'santaHat') {
+    p.fill(200, 40, 50);
+    p.triangle(-7 * s, -17 * s, 7 * s, -17 * s, 4 * s, -30 * s);
+    p.fill(255, 255, 255);
+    p.rect(-9 * s, -18 * s, 18 * s, 4 * s, 2);
+    p.circle(4 * s, -30 * s, 5.5 * s);
+  } else if (accessory === 'tutu') {
+    p.fill(255, 150, 210, 230);
+    for (let i = 0; i <= 10; i++) {
+      const a = (i / 10) * Math.PI - Math.PI / 2;
       p.push();
-      p.translate(side * 7 * s, -1 * s);
-      p.rotate(side * -0.35);
-      p.ellipse(0, 0, 7 * s, 15 * s);
-      p.ellipse(0, 4 * s, 5 * s, 9 * s);
+      p.translate(Math.sin(a) * 9 * s, 9 * s + Math.cos(a) * 2.5 * s);
+      p.ellipse(0, 0, 5.5 * s, 6.5 * s);
       p.pop();
-    });
+    }
+    p.fill(230, 100, 180, 230);
+    p.ellipse(0, 9 * s, 18 * s, 5 * s);
+  } else if (accessory === 'beard') {
+    p.fill(212, 206, 196);
+    p.beginShape();
+    p.vertex(-5 * s, -6 * s);
+    p.vertex(5 * s, -6 * s);
+    p.vertex(4 * s, 2 * s);
+    p.vertex(0, 6 * s);
+    p.vertex(-4 * s, 2 * s);
+    p.endShape(p.CLOSE);
+    p.fill(190, 184, 174);
+    p.triangle(-2 * s, 0, 2 * s, 0, 0, 5 * s);
   }
 }
 
@@ -536,7 +710,7 @@ class SideScrollerRunner {
     if (pos.falling) p.rotate(Math.min(this.fallElapsed * 2, 1.4));
 
     const legSwing = pos.jumping || pos.falling ? 0 : Math.sin(pos.walkT * Math.PI * 2) * 7;
-    drawCapuchin(p, this.tile, { legSwing });
+    drawCharacter(p, this.tile, { legSwing });
 
     p.pop();
   }
@@ -1022,7 +1196,65 @@ class GridMazeRunner {
     this._drawScanner();
     this._drawOctopus();
     this._drawPlayer();
+    this._drawDarkness();
     p.pop();
+  }
+
+  // Dungeon theme only: torches (plus a small radius around the player, for
+  // playability) are the only light — everything else gets masked to near-
+  // black. Implemented as an offscreen buffer filled opaque, then punched
+  // through with radial-gradient "destination-out" circles at each light
+  // source, so the reveal falls off softly instead of a hard-edged circle.
+  _torchCells() {
+    if (this._torchCellsCache) return this._torchCellsCache;
+    const { grid, goal } = this.level;
+    const rows = grid.length;
+    const cols = grid[0].length;
+    const isFloor = (r, c) => r >= 0 && r < rows && c >= 0 && c < cols && grid[r][c] !== 'wall';
+    const cells = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (!isFloor(r, c)) continue;
+        const isGoal = r === goal.row && c === goal.col;
+        const torchRoll = hash01(r * 37 + c * 91 + 5);
+        const wallAdjacent = !isFloor(r - 1, c) || !isFloor(r + 1, c) || !isFloor(r, c - 1) || !isFloor(r, c + 1);
+        if (wallAdjacent && !isGoal && torchRoll < 0.16) cells.push({ row: r, col: c });
+      }
+    }
+    this._torchCellsCache = cells;
+    return cells;
+  }
+
+  _drawDarkness() {
+    if (this.theme !== 'dungeon') return;
+    const p = this.p;
+    if (!this._darkBuf) this._darkBuf = p.createGraphics(this.levelWidthPx(), this.levelHeightPx());
+    const buf = this._darkBuf;
+    buf.clear();
+    buf.background(8, 5, 5, 242);
+    const ctx = buf.drawingContext;
+    ctx.globalCompositeOperation = 'destination-out';
+
+    const playerPos = this.playerPos();
+    const lights = this._torchCells().map((cell) => ({
+      x: cell.col * this.tile + this.tile / 2,
+      y: cell.row * this.tile + this.tile / 2,
+      radius: this.tile * 2.6,
+    }));
+    lights.push({ x: playerPos.x, y: playerPos.y, radius: this.tile * 1.9 });
+
+    lights.forEach(({ x, y, radius }) => {
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
+      grad.addColorStop(0, 'rgba(255,255,255,1)');
+      grad.addColorStop(0.6, 'rgba(255,255,255,0.55)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.globalCompositeOperation = 'source-over';
+    p.image(buf, 0, 0);
   }
 
   // BFS distance-to-goal for every floor cell, used to draw a faint arrow
@@ -1253,7 +1485,7 @@ class GridMazeRunner {
     p.ellipse(pos.x, pos.y + this.tile * 0.28, this.tile * 0.4, this.tile * 0.14);
     p.push();
     p.translate(pos.x, pos.y);
-    drawCapuchin(p, this.tile, {});
+    drawCharacter(p, this.tile, {});
     p.pop();
   }
 }

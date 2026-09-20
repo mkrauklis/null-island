@@ -208,16 +208,46 @@ finish, where a **helicopter is waiting outside** — the ending.
 
 ## The player character
 
-The player is a capuchin, customizable (color + one cosmetic: party hat, top
-hat, or angel wings) from a panel on the splash screen (`index.html`).
+Customizable from a panel on the splash screen (`index.html`): species
+("skin" — capuchin, gorilla, manatee, or proboscis monkey), one of 8 fur
+colors, and one cosmetic (party hat, top hat, santa hat, angel wings, tutu,
+beard, or a torch hat unlocked by clearing World 3).
 `Progress.getCharacter()`/`setCharacter()` store the choice in localStorage,
 deliberately outside `resetAll()` — it's a cosmetic preference, not
-progress, so "reset progress" doesn't silently undo it.
+progress, so "reset progress" doesn't silently undo it. Unlockable
+cosmetics check `Progress.getWorld(<id>).cleared` directly rather than
+their own separate unlock flag — one source of truth.
 
-Drawn by one shared function, `drawCapuchin(p, tile, opts)` (engine.js),
+Drawn by one shared function, `drawCharacter(p, tile, opts)` (engine.js),
 called from three places: the splash-screen preview, `SideScrollerRunner`,
-and `GridMazeRunner`. Pick a color once and it's the same monkey everywhere
-in the game — there's no per-world character art to keep in sync.
+and `GridMazeRunner`. Pick a look once and it's the same everywhere in the
+game — no per-world character art to keep in sync. Each skin is its own
+small drawing function (`drawGorillaBody`, etc.) sharing the same color/
+accessory system; wings draw *before* the body (so they sit behind it) while
+hats draw after (on top of an already-drawn head) — the two accessory
+categories need opposite z-order and there was no getting around that with
+a single draw pass.
+
+## Rank
+
+`js/ranks.js` computes a title (Castaway → ... → Island Escapee) from a
+score derived from Progress every time it's shown — worlds cleared (10 pts),
+stars earned (5 pts), achievements unlocked (3 pts each) — rather than being
+stored anywhere, so it can't drift out of sync with the save data it's
+summarizing. Shown on World Select only, since that's the progress hub.
+
+## World 3 lighting
+
+Dungeon-theme grid mazes render mostly dark, lit only by torches (placed by
+`_torchCells()`, the same deterministic rule `_drawGrid` already used to draw
+them) plus a small radius around the player for playability — a pure
+constructive-visibility choice, not spoken about in the design brief
+originally, added because the dungeon needed the torches to actually mean
+something. Implemented as an offscreen buffer filled opaque near-black, then
+punched through with `destination-out` radial gradients at each light
+source (`GridMazeRunner._drawDarkness`) — soft falloff instead of a hard
+circle. World 2 (theme `'vents'`) is unaffected; the darkness pass no-ops
+for any theme but `'dungeon'`.
 
 ## Repo conventions
 

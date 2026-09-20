@@ -232,6 +232,12 @@ header.hero p {
   color: #04140b;
 }
 
+.accessory-btn.locked {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
 /* Splash screen */
 .splash-actions {
   display: flex;
@@ -248,6 +254,16 @@ header.hero p {
 .button.secondary:hover {
   background: rgba(61, 220, 132, 0.12);
   color: var(--accent);
+}
+
+.rank-badge {
+  margin-top: 1rem;
+  display: inline-block;
+  padding: 0.4rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 20px;
+  color: var(--ink);
+  font-size: 0.9rem;
 }
 
 /* World select / settings */
