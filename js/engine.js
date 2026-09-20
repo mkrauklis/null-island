@@ -225,6 +225,7 @@ const CHARACTER_COLORS = {
   purple: [161, 96, 204],
   black: [46, 44, 50],
   white: [232, 232, 232],
+  slate: [108, 122, 137],
 };
 
 function drawCharacter(p, tile, opts = {}) {
@@ -474,6 +475,19 @@ function drawAccessory(p, s, accessory) {
     }
     p.fill(230, 100, 180, 230);
     p.ellipse(0, 9 * s, 18 * s, 5 * s);
+  } else if (accessory === 'overalls') {
+    p.fill(70, 100, 150);
+    p.rect(-7 * s, 0, 14 * s, 10 * s, 2);
+    p.stroke(70, 100, 150);
+    p.strokeWeight(2.5 * s);
+    p.line(-5 * s, 0, -7 * s, -9 * s);
+    p.line(5 * s, 0, 7 * s, -9 * s);
+    p.noStroke();
+    p.fill(50, 75, 120);
+    p.rect(-2 * s, 2 * s, 4 * s, 4 * s, 1);
+    p.fill(220, 200, 80);
+    p.circle(-6 * s, -8 * s, 1.8 * s);
+    p.circle(6 * s, -8 * s, 1.8 * s);
   } else if (accessory === 'beard') {
     p.fill(212, 206, 196);
     p.beginShape();
