@@ -243,6 +243,7 @@ const CHARACTER_COLORS = {
   black: [46, 44, 50],
   white: [232, 232, 232],
   slate: [108, 122, 137],
+  clouds: [214, 228, 242],
 };
 
 function drawCharacter(p, tile, opts = {}) {
@@ -265,7 +266,28 @@ function drawCharacter(p, tile, opts = {}) {
   else if (skin === 'spiderMonkey') drawSpiderMonkeyBody(p, s, fr, fg, fb, legSwing);
   else drawCapuchinBody(p, s, fr, fg, fb, legSwing);
 
+  // "Clouds" isn't a flat color — it's a texture overlay on top of the
+  // (pale) base fur/skin, a handful of soft white puffs scattered over the
+  // torso. Drawn as a decorative pass rather than plumbed into each skin's
+  // own fill calls, so it works identically across every skin without
+  // touching five separate body-drawing functions.
+  if (color === 'clouds') drawCloudsTexture(p, s);
+
   drawAccessory(p, s, accessory);
+}
+
+function drawCloudsTexture(p, s) {
+  const puffs = [
+    [-5, 2, 5], [3, 0, 4.5], [0, 5, 5.5], [-3, 7, 4], [4, 6, 4],
+    [-6, -6, 3.5], [5, -6, 3.5], [0, -8, 4],
+  ];
+  p.noStroke();
+  puffs.forEach(([dx, dy, r]) => {
+    p.fill(255, 255, 255, 210);
+    p.circle(dx * s, dy * s, r * s);
+    p.fill(190, 205, 222, 130);
+    p.circle(dx * s + 1 * s, dy * s + 1.4 * s, r * s * 0.55);
+  });
 }
 
 function drawWings(p, s) {
@@ -514,6 +536,14 @@ function drawAccessory(p, s, accessory) {
     p.rect(-10 * s, -17 * s, 20 * s, 3 * s, 1);
     p.fill(180, 40, 60);
     p.rect(-7 * s, -19 * s, 14 * s, 2.5 * s);
+  } else if (accessory === 'leprechaunHat') {
+    p.fill(30, 120, 60);
+    p.rect(-6 * s, -25 * s, 12 * s, 9 * s, 1);
+    p.rect(-10 * s, -17 * s, 20 * s, 3 * s, 1);
+    p.fill(20, 20, 24);
+    p.rect(-6 * s, -18 * s, 12 * s, 2.5 * s);
+    p.fill(230, 195, 60);
+    p.rect(-2 * s, -18.5 * s, 4 * s, 3.5 * s, 1);
   } else if (accessory === 'torchHat') {
     const flicker = 0.6 + 0.4 * Math.sin((typeof window !== 'undefined' ? Date.now() : 0) * 0.012);
     p.fill(255, 140, 40, 45 * flicker);

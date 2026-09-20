@@ -48,7 +48,12 @@
 <script src="js/engine.js"></script>
 <script src="js/progress.js"></script>
 <script>
-const COLOR_IDS = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'black', 'white', 'slate'];
+const COLORS = [
+  { id: 'red' }, { id: 'orange' }, { id: 'yellow' }, { id: 'green' },
+  { id: 'blue' }, { id: 'purple' }, { id: 'black' }, { id: 'white' },
+  { id: 'slate' },
+  { id: 'clouds', requiresWorld: 'world4', requiresLabel: 'Beat The Foundry to unlock' },
+];
 const SKINS = [
   { id: 'capuchin', label: 'Capuchin' },
   { id: 'gorilla', label: 'Gorilla' },
@@ -65,6 +70,7 @@ const ACCESSORIES = [
   { id: 'tutu', label: 'Tutu' },
   { id: 'beard', label: 'Beard' },
   { id: 'overalls', label: 'Overalls' },
+  { id: 'leprechaunHat', label: 'Leprechaun Hat' },
   { id: 'torchHat', label: 'Torch Hat', requiresWorld: 'world3', requiresLabel: 'Beat The Dungeon Halls to unlock' },
 ];
 
@@ -74,18 +80,23 @@ let previewP;
 function renderSwatches() {
   const el = document.getElementById('color-swatches');
   el.innerHTML = '';
-  COLOR_IDS.forEach((id) => {
+  COLORS.forEach(({ id, requiresWorld, requiresLabel }) => {
+    const locked = requiresWorld && !Progress.getWorld(requiresWorld).cleared;
     const [r, g, b] = CHARACTER_COLORS[id];
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'swatch' + (character.color === id ? ' selected' : '');
+    btn.className = 'swatch' + (character.color === id ? ' selected' : '') + (locked ? ' locked' : '');
     btn.style.background = `rgb(${r},${g},${b})`;
-    btn.title = id;
-    btn.addEventListener('click', () => {
-      character = { ...character, color: id };
-      Progress.setCharacter(character);
-      renderSwatches();
-    });
+    btn.title = locked ? requiresLabel : id;
+    if (locked) {
+      btn.disabled = true;
+    } else {
+      btn.addEventListener('click', () => {
+        character = { ...character, color: id };
+        Progress.setCharacter(character);
+        renderSwatches();
+      });
+    }
     el.appendChild(btn);
   });
 }

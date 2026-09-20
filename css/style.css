@@ -221,6 +221,12 @@ header.hero p {
   box-shadow: 0 0 0 2px rgba(61, 220, 132, 0.35);
 }
 
+.swatch.locked {
+  opacity: 0.35;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
 .accessory-row {
   display: flex;
   flex-wrap: wrap;
