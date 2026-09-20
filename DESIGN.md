@@ -210,6 +210,50 @@ BFS-computed par undercut the "three separate identical detours" solution —
 not a bug, just means the naive intended solution isn't always the optimal
 one, same as it isn't in World 2 or 3.
 
+**The squid — Red Light, Green Light.** A fixed overseer, drawn in the HUD
+above the catwalk (not part of the level grid — see `_drawSquid`), with one
+eye that cycles on a repeating tick pattern (`level.squid.pattern`, a
+boolean array indexed by `tick % pattern.length`, same trick as the
+scanner's `path`). Grey and "looking around" = safe to move. Red and
+watching = any move (not `wait()`) anywhere gets you caught — it's global,
+not spatial, deliberately: there's no dodging by position, only by timing,
+same as the real game. A persistent, faint sight-cone from the eye to the
+floor illustrates that "hitbox" even while safe (floods solid red while
+watching), so it never has to be inferred.
+
+Implementation stayed inside the existing simulate-then-replay contract:
+`squidWatchAt(squid, tick)` is a pure function of the tick number, so
+`simulateGridMaze`'s `step()` can reject a non-wait move outright (a
+`'caught'` trace event, same shape the scanner already produces), and
+`computeMinMovesGrid`'s BFS can treat "moving on a watched tick" as a
+disallowed transition when searching for par (state key extended to tick
+mod `lcm(scannerPeriod, squidPeriod)`, so a level with both hazards someday
+would still search correctly, though no built world uses both at once yet).
+No new execution model, no live reaction — same reasoning as every other
+enemy in this game.
+
+**Foundry is "nearly pitch black."** Reused the dungeon's darkness pass
+(`_drawDarkness`, `destination-out` radial gradients on an offscreen
+buffer) rather than writing a second one — foundry just has no torches at
+all, only a tight ring around the player, and a darker base fill than the
+dungeon's. The squid's glow and sight-cone are drawn in the HUD layer,
+*after* the darkness mask is applied to the level below, so they stay
+visible even when the corridor itself is barely legible — a deliberate
+"you can't see the room, but you can always see it watching you" effect.
+
+**Line pointer.** During playback, the CodeMirror line whose call produced
+the step currently animating gets a highlight (`cm-current-line`), cleared
+the moment playback stops. Every trace entry across all three simulate
+functions now carries a `.line` — captured via `getCallerLine()`, which
+reads the call site straight out of `new Error().stack` at a fixed stack
+depth (calibrated empirically against V8, since every api function is
+called `player code → arrow wrapper → step() → getCallerLine()`, always the
+same shape). This is a V8-specific trick, not a spec guarantee; on an
+engine where the stack shape doesn't match, `getCallerLine()` just returns
+`null` and playback quietly skips the highlight rather than breaking
+anything. `syncCodeHighlight(editor, runner)` is shared by all four worlds'
+render loops — one function, not four copies.
+
 ### World 5 — The Vault (top-down maze, harder) — not built
 **Teaches:** arrays/objects.
 Multiple switches/terminals manipulated by looping over a list rather than

@@ -74,6 +74,7 @@ function renderStatus() {
   const statusEl = document.getElementById('status');
   if (!runner) return;
   statusEl.className = runner.status;
+  syncCodeHighlight(editor, runner);
 
   if (runner.status === 'won' && lastStatus !== 'won') {
     const moves = runner.trace.length - 1;

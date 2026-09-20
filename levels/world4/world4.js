@@ -3,6 +3,12 @@
 // writing it once as a function and calling it three times is the natural
 // solution, though nothing enforces that (same "teaches by fit, not force"
 // choice already made for World 2's loops).
+//
+// A squid overseer watches the whole catwalk on a repeating cycle (see
+// squidWatchAt in engine.js) — Red Light, Green Light: move while its eye
+// is red and you're caught, no matter where you are. wait() is always
+// safe. Global, not spatial — there's no "getting out of its sight," only
+// "don't move while it's watching."
 const WORLD_ID = 'world4';
 
 // Unlike World 2/3's generated mazes, this layout is fully connected by
@@ -37,7 +43,15 @@ function generateLevel(seed) {
 
   const start = { row: 1, col: 0 };
   const goal = { row: 1, col: cols - 1 };
-  return { grid, start, goal };
+
+  // Red Light, Green Light: a repeating cycle of safe ticks (eye grey,
+  // looking around) then watching ticks (eye red, must wait()). Always
+  // starts on a safe tick so pressing Run cold never insta-catches anyone.
+  const safeLen = 3 + Math.floor(rng() * 3); // 3..5
+  const watchLen = 2 + Math.floor(rng() * 2); // 2..3
+  const squid = { pattern: [...new Array(safeLen).fill(false), ...new Array(watchLen).fill(true)] };
+
+  return { grid, start, goal, squid };
 }
 
 const LEVEL = generateLevel(Progress.getSeed(WORLD_ID));
@@ -94,6 +108,7 @@ function renderStatus() {
   const statusEl = document.getElementById('status');
   if (!runner) return;
   statusEl.className = runner.status;
+  syncCodeHighlight(editor, runner);
 
   if (runner.status === 'won' && lastStatus !== 'won') {
     const moves = runner.trace.length - 1;
@@ -115,6 +130,11 @@ function renderStatus() {
     case 'blocked': {
       const last = runner.trace[runner.trace.length - 1];
       statusEl.textContent = `Move ${last.tick}: that's a gap in the plating (row ${last.row}, col ${last.col}) — you need the detour there, not a straight line. Edit your code and run again.`;
+      break;
+    }
+    case 'caught': {
+      const last = runner.trace[runner.trace.length - 1];
+      statusEl.textContent = `Move ${last.tick}: the squid's eye was red and you moved anyway — caught at (row ${last.row}, col ${last.col}). Its cycle is fixed length; count ticks or just wait() until the eye goes grey again.`;
       break;
     }
     case 'error':

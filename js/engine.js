@@ -113,6 +113,22 @@ function stripComments(code) {
 
 // Runs `userCode` against `levelConfig` and returns a trace of every move,
 // without touching the screen. Throws are caught and reported as `error`.
+// Every simulate function calls its api (moveRight, wait, ...) as an arrow
+// function one level inside `step()`, which itself is called directly from
+// the player's own code (compiled via `new Function`). That fixed call
+// shape means the stack frame holding the player's source line is always
+// the same distance up from here — calibrated empirically against V8
+// (this game's target browsers), not derived from spec. Used to highlight
+// the line currently executing during trace playback; on an engine where
+// the stack shape doesn't match (non-V8), this just quietly returns null
+// and playback simply skips the highlight.
+function getCallerLine() {
+  const stack = (new Error()).stack || '';
+  const frame = stack.split('\n')[4] || '';
+  const match = frame.match(/:(\d+):(\d+)\)?$/);
+  return match ? parseInt(match[1], 10) - 2 : null;
+}
+
 function simulateSideScroller(levelConfig, userCode) {
   const { columns, startCol } = levelConfig;
   const state = { col: startCol, alive: true, won: false };
@@ -134,15 +150,16 @@ function simulateSideScroller(levelConfig, userCode) {
   function step(newCol, action) {
     guard();
     if (!state.alive || state.won) return;
+    const line = getCallerLine();
     const tile = tileAt(newCol);
     if (tile === null || tile === TILE_TYPE.GAP) {
       state.alive = false;
       state.col = newCol;
-      trace.push({ col: newCol, event: 'fell', action });
+      trace.push({ col: newCol, event: 'fell', action, line });
       return;
     }
     state.col = newCol;
-    trace.push({ col: newCol, event: tile === TILE_TYPE.GOAL ? 'goal' : 'move', action });
+    trace.push({ col: newCol, event: tile === TILE_TYPE.GOAL ? 'goal' : 'move', action, line });
     if (tile === TILE_TYPE.GOAL) state.won = true;
   }
 
@@ -806,14 +823,44 @@ class SideScrollerRunner {
 
 const GRID_STEP_TIME = 0.3; // seconds per tick, movement or wait alike
 
+// Line-pointer during trace playback: highlights the CodeMirror line whose
+// call produced the step currently animating, cleared once playback stops.
+// Shared across all four worlds' render loops (called once per frame from
+// each world's own renderStatus()) since the sync logic is identical
+// regardless of which simulate function produced the trace's `.line` data.
+let _highlightedLine = null; // 0-indexed CodeMirror line currently marked, or null
+function syncCodeHighlight(editor, runner) {
+  let target = null;
+  if (runner && runner.playing) {
+    const entry = runner.trace[Math.min(runner.stepIndex + 1, runner.trace.length - 1)];
+    if (entry && entry.line !== null && entry.line !== undefined) target = entry.line - 1;
+  }
+  if (_highlightedLine !== null && _highlightedLine !== target) {
+    editor.removeLineClass(_highlightedLine, 'background', 'cm-current-line');
+  }
+  if (target !== null && target !== _highlightedLine) {
+    editor.addLineClass(target, 'background', 'cm-current-line');
+  }
+  _highlightedLine = target;
+}
+
 function scannerPositionAt(scanner, tick) {
   if (!scanner) return null;
   return scanner.path[tick % scanner.path.length];
 }
 
+// A squid's "watching" state is, like the scanner, a deterministic function
+// of the tick number — a repeating true/false pattern (true = red eye, must
+// not move). Unlike the scanner it isn't a position to collide with; it's a
+// whole-room hazard, so the check lives in the move path, not isFloor.
+function squidWatchAt(squid, tick) {
+  if (!squid) return false;
+  return squid.pattern[tick % squid.pattern.length];
+}
+
 // Runs `userCode` against a grid level and returns a trace of every tick.
 function simulateGridMaze(levelConfig, userCode) {
-  const { grid, start, goal, scanner } = levelConfig;
+  const { grid, start, goal, scanner, squid } = levelConfig;
   const rows = grid.length;
   const cols = grid[0].length;
   const state = { row: start.row, col: start.col, alive: true, won: false };
@@ -836,9 +883,17 @@ function simulateGridMaze(levelConfig, userCode) {
     guard();
     if (!state.alive || state.won) return;
     const tick = trace.length;
+    const line = getCallerLine();
     if (!isFloor(newRow, newCol)) {
       state.alive = false;
-      trace.push({ row: newRow, col: newCol, event: 'blocked', action, tick });
+      trace.push({ row: newRow, col: newCol, event: 'blocked', action, tick, line });
+      return;
+    }
+    if (action !== 'wait' && squidWatchAt(squid, tick)) {
+      state.row = newRow;
+      state.col = newCol;
+      state.alive = false;
+      trace.push({ row: newRow, col: newCol, event: 'caught', action, tick, line });
       return;
     }
     state.row = newRow;
@@ -846,11 +901,11 @@ function simulateGridMaze(levelConfig, userCode) {
     const scanPos = scannerPositionAt(scanner, tick);
     if (scanPos && scanPos.row === newRow && scanPos.col === newCol) {
       state.alive = false;
-      trace.push({ row: newRow, col: newCol, event: 'caught', action, tick });
+      trace.push({ row: newRow, col: newCol, event: 'caught', action, tick, line });
       return;
     }
     const atGoal = newRow === goal.row && newCol === goal.col;
-    trace.push({ row: newRow, col: newCol, event: atGoal ? 'goal' : 'move', action, tick });
+    trace.push({ row: newRow, col: newCol, event: atGoal ? 'goal' : 'move', action, tick, line });
     if (atGoal) state.won = true;
   }
 
@@ -872,15 +927,21 @@ function simulateGridMaze(levelConfig, userCode) {
   return { trace, success: state.won, error };
 }
 
-// True minimum ticks to clear a grid level, including any Scanner. State is
-// (row, col, tick mod scanner period) since the scanner's future is fully
-// determined by the tick number modulo its patrol length — that keeps the
-// search space finite even though the scanner never actually stops moving.
+function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
+function lcm(a, b) { return (a * b) / gcd(a, b); }
+
+// True minimum ticks to clear a grid level, including any Scanner and/or
+// Squid. State is (row, col, tick mod combined period) since both hazards'
+// futures are fully determined by the tick number modulo their own patrol/
+// watch-cycle length — using the LCM of both as the combined period keeps
+// that still true even with both present, and keeps the search space finite.
 function computeMinMovesGrid(levelConfig) {
-  const { grid, start, goal, scanner } = levelConfig;
+  const { grid, start, goal, scanner, squid } = levelConfig;
   const rows = grid.length;
   const cols = grid[0].length;
-  const period = scanner ? scanner.path.length : 1;
+  const scannerPeriod = scanner ? scanner.path.length : 1;
+  const squidPeriod = squid ? squid.pattern.length : 1;
+  const period = lcm(scannerPeriod, squidPeriod);
 
   function isFloor(r, c) {
     return r >= 0 && r < rows && c >= 0 && c < cols && grid[r][c] !== 'wall';
@@ -904,6 +965,8 @@ function computeMinMovesGrid(levelConfig) {
       if (!isFloor(nr, nc)) continue;
       const nextDist = cur.dist + 1;
       if (hits(nr, nc, nextDist)) continue;
+      const isMove = dr !== 0 || dc !== 0;
+      if (isMove && squidWatchAt(squid, nextDist)) continue;
       const nextTickMod = (cur.tickMod + 1) % period;
       const key = `${nr},${nc},${nextTickMod}`;
       if (visited.has(key)) continue;
@@ -1028,8 +1091,8 @@ function simulateGridMazeChase(levelConfig, userCode) {
       throw new Error('Too many moves — check for an infinite loop.');
     }
   }
-  function pushTrace(event, action) {
-    trace.push({ row: state.row, col: state.col, octoPositions: state.octopi.map((o) => ({ ...o })), event, action, tick: trace.length });
+  function pushTrace(event, action, line) {
+    trace.push({ row: state.row, col: state.col, octoPositions: state.octopi.map((o) => ({ ...o })), event, action, tick: trace.length, line });
   }
   function onOctopus(r, c) {
     return state.octopi.some((o) => o.row === r && o.col === c);
@@ -1039,11 +1102,12 @@ function simulateGridMazeChase(levelConfig, userCode) {
     guard();
     if (state.finished) return;
     const tick = trace.length;
+    const line = getCallerLine();
     if (!isFloor(newRow, newCol)) {
       state.finished = true;
       state.row = newRow;
       state.col = newCol;
-      pushTrace('blocked', action);
+      pushTrace('blocked', action, line);
       return;
     }
     state.row = newRow;
@@ -1051,7 +1115,7 @@ function simulateGridMazeChase(levelConfig, userCode) {
 
     if (onOctopus(state.row, state.col)) {
       state.finished = true;
-      pushTrace('caught', action);
+      pushTrace('caught', action, line);
       return;
     }
 
@@ -1065,7 +1129,7 @@ function simulateGridMazeChase(levelConfig, userCode) {
       state.octopi = state.octopi.map((o) => chaseStep(grid, o, { row: state.row, col: state.col }));
       if (onOctopus(state.row, state.col)) {
         state.finished = true;
-        pushTrace('caught', action);
+        pushTrace('caught', action, line);
         return;
       }
     }
@@ -1074,14 +1138,14 @@ function simulateGridMazeChase(levelConfig, userCode) {
       state.finished = true;
       if (state.usedOctopusNear) {
         state.won = true;
-        pushTrace('goal', action);
+        pushTrace('goal', action, line);
       } else {
-        pushTrace('goal-unearned', action);
+        pushTrace('goal-unearned', action, line);
       }
       return;
     }
 
-    pushTrace('move', action);
+    pushTrace('move', action, line);
   }
 
   const api = {
@@ -1282,13 +1346,19 @@ class GridMazeRunner {
     this._drawPlayer();
     this._drawDarkness();
     p.pop();
+    // The squid is a fixed HUD overseer, not part of the level — drawn
+    // after the pop so it never scrolls with the camera and stays visible
+    // (glowing eye included) even through the darkness mask above.
+    this._drawSquid();
   }
 
-  // Dungeon theme only: torches (plus a small radius around the player, for
-  // playability) are the only light — everything else gets masked to near-
-  // black. Implemented as an offscreen buffer filled opaque, then punched
-  // through with radial-gradient "destination-out" circles at each light
-  // source, so the reveal falls off softly instead of a hard-edged circle.
+  // Dungeon theme: torches (plus a small radius around the player, for
+  // playability) are the only light. Foundry theme: no torches at all, just
+  // a tight radius around the player — "nearly pitch black." Everything
+  // else gets masked to near-black either way. Implemented as an offscreen
+  // buffer filled opaque, then punched through with radial-gradient
+  // "destination-out" circles at each light source, so the reveal falls off
+  // softly instead of a hard-edged circle.
   _torchCells() {
     if (this._torchCellsCache) return this._torchCellsCache;
     const { grid, goal } = this.level;
@@ -1310,22 +1380,26 @@ class GridMazeRunner {
   }
 
   _drawDarkness() {
-    if (this.theme !== 'dungeon') return;
+    const dungeon = this.theme === 'dungeon';
+    const foundry = this.theme === 'foundry';
+    if (!dungeon && !foundry) return;
     const p = this.p;
     if (!this._darkBuf) this._darkBuf = p.createGraphics(this.levelWidthPx(), this.levelHeightPx());
     const buf = this._darkBuf;
     buf.clear();
-    buf.background(8, 5, 5, 242);
+    // Foundry has no torches at all — just a tight ring around the player —
+    // so it reads as noticeably darker than the dungeon's torch-lit halls.
+    buf.background(foundry ? p.color(3, 2, 1, 250) : p.color(8, 5, 5, 242));
     const ctx = buf.drawingContext;
     ctx.globalCompositeOperation = 'destination-out';
 
     const playerPos = this.playerPos();
-    const lights = this._torchCells().map((cell) => ({
+    const lights = dungeon ? this._torchCells().map((cell) => ({
       x: cell.col * this.tile + this.tile / 2,
       y: cell.row * this.tile + this.tile / 2,
       radius: this.tile * 2.6,
-    }));
-    lights.push({ x: playerPos.x, y: playerPos.y, radius: this.tile * 1.9 });
+    })) : [];
+    lights.push({ x: playerPos.x, y: playerPos.y, radius: this.tile * (foundry ? 1.5 : 1.9) });
 
     lights.forEach(({ x, y, radius }) => {
       const grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
@@ -1578,6 +1652,84 @@ class GridMazeRunner {
       p.circle(6, -3, 4);
       p.pop();
     });
+  }
+
+  // The squid: a fixed overseer above the play area, not part of the level
+  // grid — drawn in screen space (see draw()) so it never scrolls off with
+  // the camera. Its "watching" state is read straight off the trace, same
+  // simulate-then-replay contract as everything else; this just visualizes
+  // it in sync with playback rather than deciding anything live.
+  _drawSquid() {
+    const squid = this.level.squid;
+    if (!squid) return;
+    const p = this.p;
+    const entry = this.trace[Math.min(this.stepIndex + 1, this.trace.length - 1)];
+    const watching = squidWatchAt(squid, entry.tick);
+    const t = p.millis() * 0.001;
+    const eyeX = this.viewportW / 2;
+    const eyeY = 30;
+
+    // Persistent illustration of its "sight" — a cone from the eye down to
+    // the whole visible floor. It's always faintly there (so you can see
+    // what it's watching even when it's safe) and floods solid red when
+    // watching. This is Red Light/Green Light, not a spatial cone you can
+    // dodge by standing elsewhere — the cone covers the whole play area on
+    // purpose, because that's the actual hitbox: anywhere, while it's red.
+    p.noStroke();
+    if (watching) {
+      const pulse = 0.5 + 0.5 * Math.sin(t * 10);
+      p.fill(220, 30, 30, 55 + pulse * 30);
+    } else {
+      p.fill(120, 90, 150, 22);
+    }
+    p.triangle(eyeX, eyeY, 0, this.viewportH, this.viewportW, this.viewportH);
+
+    if (watching) {
+      const pulse = 0.5 + 0.5 * Math.sin(t * 10);
+      p.noStroke();
+      p.fill(200, 20, 20, 35 + pulse * 20);
+      p.rect(0, 0, this.viewportW, this.viewportH);
+    }
+
+    p.push();
+    p.translate(eyeX, eyeY);
+
+    p.noFill();
+    p.stroke(90, 55, 110, 180);
+    p.strokeWeight(3);
+    [-16, -8, 8, 16].forEach((dx, i) => {
+      const wave = Math.sin(t * 2 + i) * 4;
+      p.beginShape();
+      p.curveVertex(dx, 14);
+      p.curveVertex(dx, 14);
+      p.curveVertex(dx + wave, 24);
+      p.curveVertex(dx - wave * 0.5, 32);
+      p.curveVertex(dx - wave * 0.5, 32);
+      p.endShape();
+    });
+
+    p.noStroke();
+    p.fill(70, 40, 90);
+    p.ellipse(0, 0, 46, 30);
+
+    p.fill(20, 12, 22);
+    p.circle(0, -2, 20);
+    if (watching) {
+      const glow = 0.6 + 0.4 * Math.sin(t * 14);
+      p.fill(255, 40, 40, 60 * glow);
+      p.circle(0, -2, 26 + glow * 6);
+      p.fill(255, 30, 30);
+      p.circle(0, -2, 13);
+      p.fill(255, 160, 160);
+      p.circle(0, -2, 5);
+    } else {
+      const sweep = Math.sin(t * 1.3) * 5;
+      p.fill(160, 160, 170);
+      p.circle(0, -2, 13);
+      p.fill(30, 30, 35);
+      p.circle(sweep, -2, 6);
+    }
+    p.pop();
   }
 
   _drawPlayer() {

@@ -113,6 +113,10 @@ header.hero p {
   background: rgba(224, 84, 107, 0.22) !important;
 }
 
+.cm-current-line {
+  background: rgba(61, 220, 132, 0.16) !important;
+}
+
 .cm-error-text {
   border-bottom: 2px wavy var(--danger);
   text-decoration: underline wavy var(--danger);
