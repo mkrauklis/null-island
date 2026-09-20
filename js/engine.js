@@ -129,12 +129,103 @@ function getCallerLine() {
   return match ? parseInt(match[1], 10) - 2 : null;
 }
 
+// Inserts `__mark(line)` calls into every `for(init;test;update){body}`'s
+// header ONLY — init gets a mark statement immediately before the `for`;
+// test and update each get wrapped in-place as `(__mark(line), (EXPR))`
+// (the comma operator runs __mark for its side effect, then evaluates to
+// EXPR's own value, so the for-loop's own semantics are untouched). The
+// body is never touched, sliced, or moved — every edit is a small in-place
+// insertion at a precise character offset, so nothing about the body's
+// line numbers ever shifts. That matters a lot: getCallerLine() (used for
+// the ordinary per-move highlight) reports line numbers against whatever
+// code actually ran, so if a for-loop's body got relocated or reflowed by
+// this rewrite, every move/wait call's reported line would silently drift
+// off the body's real source lines. Keeping the body byte-for-byte in
+// place, and only ever inserting (never deleting or reordering) text
+// elsewhere, guarantees line numbers stay correct everywhere outside the
+// handful of characters added to a header line itself. Because of that,
+// this can safely instrument for-loops at any nesting depth, including
+// nested inside another for-loop's body — nothing about one for-loop's
+// edits can ever overlap another's, nested or not, since only their
+// headers are touched and headers never contain another loop.
+function instrumentForLoops(code) {
+  let ast;
+  try {
+    ast = acorn.parse(code, { ecmaVersion: 2020, locations: true, ranges: true });
+  } catch (e) {
+    return null;
+  }
+  const edits = [];
+  (function visit(node) {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { node.forEach(visit); return; }
+    if (node.type === 'ForStatement') {
+      const initLine = node.init ? node.init.loc.start.line : node.loc.start.line;
+      edits.push({ at: node.start, text: `__mark(${initLine}); ` });
+      if (node.test) {
+        const testLine = node.test.loc.start.line;
+        edits.push({ at: node.test.start, text: `(__mark(${testLine}), (` });
+        edits.push({ at: node.test.end, text: '))' });
+      }
+      if (node.update) {
+        const updateLine = node.update.loc.start.line;
+        edits.push({ at: node.update.start, text: `(__mark(${updateLine}), (` });
+        edits.push({ at: node.update.end, text: '))' });
+      }
+    }
+    Object.keys(node).forEach((key) => {
+      if (key === 'loc' || key === 'start' || key === 'end' || key === 'range') return;
+      visit(node[key]);
+    });
+  })(ast);
+  if (!edits.length) return code;
+
+  // Pure insertions (never a range replacement), so applying them in
+  // descending-offset order against the original string is always safe —
+  // each edit only ever affects text at-or-after its own offset, and every
+  // not-yet-applied edit's offset is strictly smaller.
+  edits.sort((a, b) => b.at - a.at);
+  let out = code;
+  edits.forEach((e) => {
+    out = out.slice(0, e.at) + e.text + out.slice(e.at);
+  });
+  return out;
+}
+
+// Builds the merged, ordered sequence of "interesting moments" step mode
+// walks through one click at a time: every phase event (for-loop init/
+// test/update, from __mark) interleaved with every real move/wait, in the
+// order they actually happened. phaseEvents are recorded with
+// `beforeMoveIndex` = trace.length at the moment __mark fired, i.e. "this
+// happened just before movement-trace index N exists" — so merging is
+// just walking movement indices 1..end and flushing any phase events due
+// before each one, then any left over (e.g. a final failing test after
+// the last move) at the end.
+function buildStepSequence(trace, phaseEvents) {
+  const steps = [];
+  let pi = 0;
+  for (let i = 1; i < trace.length; i++) {
+    while (pi < phaseEvents.length && phaseEvents[pi].beforeMoveIndex <= i) {
+      steps.push({ kind: 'phase', line: phaseEvents[pi].line });
+      pi++;
+    }
+    steps.push({ kind: 'move', traceIndex: i });
+  }
+  while (pi < phaseEvents.length) {
+    steps.push({ kind: 'phase', line: phaseEvents[pi].line });
+    pi++;
+  }
+  return steps;
+}
+
 function simulateSideScroller(levelConfig, userCode) {
   const { columns, startCol } = levelConfig;
   const state = { col: startCol, alive: true, won: false };
   const trace = [{ col: state.col, event: 'start' }];
+  const phaseEvents = [];
   let error = null;
   let steps = 0;
+  let markCount = 0;
 
   function tileAt(col) {
     return columns[col] ?? null;
@@ -167,16 +258,22 @@ function simulateSideScroller(levelConfig, userCode) {
     moveRight: () => step(state.col + 1, 'moveRight'),
     moveLeft: () => step(state.col - 1, 'moveLeft'),
     jump: () => step(state.col + 2, 'jump'),
+    __mark: (line) => {
+      markCount++;
+      if (markCount > 3000) throw new Error('Loop is running too long — check your loop condition.');
+      phaseEvents.push({ line, beforeMoveIndex: trace.length });
+    },
   };
 
   try {
-    const fn = new Function('moveRight', 'moveLeft', 'jump', userCode);
-    fn(api.moveRight, api.moveLeft, api.jump);
+    const instrumented = instrumentForLoops(userCode);
+    const fn = new Function('moveRight', 'moveLeft', 'jump', '__mark', instrumented !== null ? instrumented : userCode);
+    fn(api.moveRight, api.moveLeft, api.jump, api.__mark);
   } catch (e) {
     error = e.message;
   }
 
-  return { trace, success: state.won, error };
+  return { trace, success: state.won, error, phaseEvents };
 }
 
 // True minimum number of actions to clear a side-scroller level, via BFS
@@ -243,7 +340,6 @@ const CHARACTER_COLORS = {
   black: [46, 44, 50],
   white: [232, 232, 232],
   slate: [108, 122, 137],
-  clouds: [214, 228, 242],
 };
 
 function drawCharacter(p, tile, opts = {}) {
@@ -264,30 +360,10 @@ function drawCharacter(p, tile, opts = {}) {
   else if (skin === 'manatee') drawManateeBody(p, s, fr, fg, fb, legSwing);
   else if (skin === 'proboscis') drawProboscisBody(p, s, fr, fg, fb, legSwing);
   else if (skin === 'spiderMonkey') drawSpiderMonkeyBody(p, s, fr, fg, fb, legSwing);
+  else if (skin === 'narwhal') drawNarwhalBody(p, s, fr, fg, fb, legSwing);
   else drawCapuchinBody(p, s, fr, fg, fb, legSwing);
 
-  // "Clouds" isn't a flat color — it's a texture overlay on top of the
-  // (pale) base fur/skin, a handful of soft white puffs scattered over the
-  // torso. Drawn as a decorative pass rather than plumbed into each skin's
-  // own fill calls, so it works identically across every skin without
-  // touching five separate body-drawing functions.
-  if (color === 'clouds') drawCloudsTexture(p, s);
-
   drawAccessory(p, s, accessory);
-}
-
-function drawCloudsTexture(p, s) {
-  const puffs = [
-    [-5, 2, 5], [3, 0, 4.5], [0, 5, 5.5], [-3, 7, 4], [4, 6, 4],
-    [-6, -6, 3.5], [5, -6, 3.5], [0, -8, 4],
-  ];
-  p.noStroke();
-  puffs.forEach(([dx, dy, r]) => {
-    p.fill(255, 255, 255, 210);
-    p.circle(dx * s, dy * s, r * s);
-    p.fill(190, 205, 222, 130);
-    p.circle(dx * s + 1 * s, dy * s + 1.4 * s, r * s * 0.55);
-  });
 }
 
 function drawWings(p, s) {
@@ -426,6 +502,55 @@ function drawManateeBody(p, s, fr, fg, fb, legSwing) {
   p.pop();
 }
 
+function drawNarwhalBody(p, s, fr, fg, fb, legSwing) {
+  const wobble = legSwing * 0.015;
+  p.push();
+  p.rotate(wobble);
+
+  // flippers + a horizontal tail fluke instead of legs — same swim-plan
+  // idea as the manatee, just a leaner torpedo body
+  p.noStroke();
+  p.fill(fr * 0.75, fg * 0.75, fb * 0.75);
+  p.ellipse(-11 * s, 5 * s, 9 * s, 5 * s);
+  p.ellipse(11 * s, 5 * s, 9 * s, 5 * s);
+  p.ellipse(0, 15 * s, 20 * s, 6 * s);
+
+  // long torpedo body
+  p.fill(fr, fg, fb);
+  p.ellipse(0, 0, 20 * s, 24 * s);
+
+  // rounded head, narrower than the body
+  p.fill(fr * 0.95, fg * 0.95, fb * 0.95);
+  p.ellipse(0, -12 * s, 13 * s, 13 * s);
+
+  // mottled skin patches — narwhals are blotchy grey, not a flat color,
+  // regardless of which fur color the player picked
+  p.fill(fr * 1.2, fg * 1.2, fb * 1.2, 140);
+  p.ellipse(-4 * s, 2 * s, 6 * s, 4 * s);
+  p.ellipse(5 * s, 6 * s, 5 * s, 3 * s);
+  p.ellipse(3 * s, -4 * s, 5 * s, 4 * s);
+
+  // the signature spiral tusk, jutting up from the head
+  p.stroke(235, 228, 210);
+  p.strokeWeight(2 * s);
+  p.line(2 * s, -17 * s, 8 * s, -32 * s);
+  p.stroke(195, 185, 165);
+  p.strokeWeight(1 * s);
+  for (let i = 1; i < 5; i++) {
+    const t = i / 5;
+    const x = lerp(2 * s, 8 * s, t);
+    const y = lerp(-17 * s, -32 * s, t);
+    p.line(x - 1.2 * s, y, x + 1.2 * s, y - 0.6 * s);
+  }
+
+  // small eyes
+  p.noStroke();
+  p.fill(20, 15, 12);
+  p.circle(-4 * s, -13 * s, 1.8 * s);
+  p.circle(4 * s, -13 * s, 1.8 * s);
+  p.pop();
+}
+
 function drawProboscisBody(p, s, fr, fg, fb, legSwing) {
   // tail
   p.noFill();
@@ -544,6 +669,18 @@ function drawAccessory(p, s, accessory) {
     p.rect(-6 * s, -18 * s, 12 * s, 2.5 * s);
     p.fill(230, 195, 60);
     p.rect(-2 * s, -18.5 * s, 4 * s, 3.5 * s, 1);
+  } else if (accessory === 'cyclopsEye') {
+    // One big eye centered on the forehead, painted over wherever each
+    // skin's own (smaller) eyes are — an overlay, not a real substitution,
+    // same "drawn after body" trick every other accessory already uses.
+    p.fill(255, 255, 255);
+    p.circle(0, -10 * s, 9 * s);
+    p.fill(90, 200, 230);
+    p.circle(0, -10 * s, 5.5 * s);
+    p.fill(15, 15, 20);
+    p.circle(0, -10 * s, 2.8 * s);
+    p.fill(255, 255, 255, 180);
+    p.circle(-1.2 * s, -11.2 * s, 1.4 * s);
   } else if (accessory === 'torchHat') {
     const flicker = 0.6 + 0.4 * Math.sin((typeof window !== 'undefined' ? Date.now() : 0) * 0.012);
     p.fill(255, 140, 40, 45 * flicker);
@@ -617,6 +754,7 @@ class SideScrollerRunner {
     this.status = 'idle';
     this.fallPhase = false;
     this.fallElapsed = 0;
+    this.stepModeActive = false;
     this._buildLayers();
   }
 
@@ -642,6 +780,7 @@ class SideScrollerRunner {
   }
 
   update(dt) {
+    if (this.stepModeActive) return;
     if (this.playing) {
       this.stepElapsed += dt;
       const dur = this.currentStepDuration();
@@ -900,7 +1039,13 @@ let _highlightedLine = null; // 0-indexed CodeMirror line currently marked, or n
 let _highlightedOuterLines = []; // 0-indexed lines marked with the dim "enclosing" style
 function syncCodeHighlight(editor, runner) {
   let target = null;
-  if (runner && runner.playing) {
+  if (runner && runner.stepModeActive) {
+    // Step mode sets stepModeLine explicitly for both move steps and
+    // for-loop phase steps (init/test/update) — there's no trace index to
+    // derive a phase step's line from, so this bypasses the lookup below
+    // entirely rather than special-casing phase vs. move here too.
+    if (runner.stepModeLine !== null && runner.stepModeLine !== undefined) target = runner.stepModeLine - 1;
+  } else if (runner && runner.playing) {
     const entry = runner.trace[Math.min(runner.stepIndex + 1, runner.trace.length - 1)];
     if (entry && entry.line !== null && entry.line !== undefined) target = entry.line - 1;
   }
@@ -931,6 +1076,88 @@ function syncCodeHighlight(editor, runner) {
   _highlightedOuterLines = outerTargets;
 }
 
+// Step mode: instead of auto-playing a trace on a timer, walk the merged
+// move+phase sequence (buildStepSequence) one click at a time — the
+// "pause for a click and show init/test/update as they happen" view.
+// Shared by every world's own stepCode()/Next-button wiring, the same way
+// runCode()/renderStatus() stay per-world but lean on shared engine
+// pieces. `runner.stepModeActive` (checked by update() and
+// syncCodeHighlight) is how the rest of the engine knows to stop
+// auto-advancing and stop deriving the highlighted line from trace/
+// stepIndex the normal way while this is running.
+function createStepController({ editor, runner, statusEl, nextBtn }) {
+  let fullTrace = [];
+  let steps = [];
+  let idx = -1;
+  // Which real trace index the player is actually standing at, updated
+  // only by move steps — a phase step (init/test/update) never moves the
+  // player, so it has to keep showing wherever the most recent move (or
+  // the start, if none yet) left them, not silently jump ahead to
+  // wherever the *next* move will land. runner.trace itself is truncated
+  // to exactly that prefix for each render (restored to the full trace in
+  // finish()) — playerPos()'s own formula always looks at
+  // trace[stepIndex+1], so showing "nothing has moved past the start yet"
+  // needs trace to end exactly at the start for that to resolve correctly
+  // (stepIndex can't go negative to fake it: playerPos() reads
+  // trace[stepIndex] unconditionally, even though its value is only
+  // mathematically relevant while a move is actually interpolating).
+  let lastMoveTraceIndex = 0;
+
+  function render() {
+    const s = steps[idx];
+    if (s.kind === 'phase') {
+      runner.stepModeLine = s.line;
+    } else {
+      lastMoveTraceIndex = s.traceIndex;
+      runner.stepModeLine = fullTrace[s.traceIndex].line;
+    }
+    runner.trace = fullTrace.slice(0, lastMoveTraceIndex + 1);
+    runner.stepIndex = Math.max(0, lastMoveTraceIndex - 1);
+    runner.stepElapsed = 0;
+    const lineNum = runner.stepModeLine;
+    const lineText = lineNum ? (editor.getLine(lineNum - 1) || '').trim() : '';
+    statusEl.textContent = `Step ${idx + 1} of ${steps.length}` + (lineText ? `: ${lineText}` : '');
+  }
+
+  function finish() {
+    runner.stepModeActive = false;
+    runner.stepModeLine = null;
+    nextBtn.disabled = true;
+    // Hand off to the normal auto-play completion path (one more forced
+    // tick) so status/win-handling fires exactly the way a full Run
+    // would, instead of duplicating that branch's logic here too. Restore
+    // the untruncated trace first — render() above only ever showed a
+    // growing prefix of it.
+    runner.trace = fullTrace;
+    runner.stepIndex = Math.max(0, fullTrace.length - 2);
+    runner.stepElapsed = 9999;
+    runner.playing = true;
+  }
+
+  return {
+    start(result) {
+      fullTrace = result.trace;
+      steps = buildStepSequence(result.trace, result.phaseEvents);
+      idx = -1;
+      lastMoveTraceIndex = 0;
+      runner.stepModeActive = true;
+      runner.status = 'playing';
+      runner.trace = fullTrace.slice(0, 1);
+      runner.stepIndex = 0;
+      runner.stepElapsed = 0;
+      runner.finalSuccess = result.success;
+      runner.errorMessage = result.error;
+      nextBtn.disabled = false;
+      this.next();
+    },
+    next() {
+      if (idx >= steps.length - 1) { finish(); return; }
+      idx++;
+      render();
+    },
+  };
+}
+
 function scannerPositionAt(scanner, tick) {
   if (!scanner) return null;
   return scanner.path[tick % scanner.path.length];
@@ -952,8 +1179,10 @@ function simulateGridMaze(levelConfig, userCode) {
   const cols = grid[0].length;
   const state = { row: start.row, col: start.col, alive: true, won: false };
   const trace = [{ row: state.row, col: state.col, event: 'start', tick: 0 }];
+  const phaseEvents = [];
   let error = null;
   let steps = 0;
+  let markCount = 0;
 
   function isFloor(r, c) {
     return r >= 0 && r < rows && c >= 0 && c < cols && grid[r][c] !== 'wall';
@@ -1002,16 +1231,22 @@ function simulateGridMaze(levelConfig, userCode) {
     moveUp: () => step(state.row - 1, state.col, 'moveUp'),
     moveDown: () => step(state.row + 1, state.col, 'moveDown'),
     wait: () => step(state.row, state.col, 'wait'),
+    __mark: (line) => {
+      markCount++;
+      if (markCount > 3000) throw new Error('Loop is running too long — check your loop condition.');
+      phaseEvents.push({ line, beforeMoveIndex: trace.length });
+    },
   };
 
   try {
-    const fn = new Function('moveRight', 'moveLeft', 'moveUp', 'moveDown', 'wait', userCode);
-    fn(api.moveRight, api.moveLeft, api.moveUp, api.moveDown, api.wait);
+    const instrumented = instrumentForLoops(userCode);
+    const fn = new Function('moveRight', 'moveLeft', 'moveUp', 'moveDown', 'wait', '__mark', instrumented !== null ? instrumented : userCode);
+    fn(api.moveRight, api.moveLeft, api.moveUp, api.moveDown, api.wait, api.__mark);
   } catch (e) {
     error = e.message;
   }
 
-  return { trace, success: state.won, error };
+  return { trace, success: state.won, error, phaseEvents };
 }
 
 function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
@@ -1166,8 +1401,10 @@ function simulateGridMazeChase(levelConfig, userCode) {
     usedOctopusNear: false,
   };
   const trace = [{ row: state.row, col: state.col, octoPositions: octopi.map((o) => ({ ...o })), event: 'start', tick: 0 }];
+  const phaseEvents = [];
   let error = null;
   let steps = 0;
+  let markCount = 0;
 
   function isFloor(r, c) {
     return r >= 0 && r < rows && c >= 0 && c < cols && grid[r][c] !== 'wall';
@@ -1245,16 +1482,22 @@ function simulateGridMazeChase(levelConfig, userCode) {
       state.usedOctopusNear = true;
       return state.octopi.some((o) => Math.abs(state.row - o.row) + Math.abs(state.col - o.col) <= 2);
     },
+    __mark: (line) => {
+      markCount++;
+      if (markCount > 3000) throw new Error('Loop is running too long — check your loop condition.');
+      phaseEvents.push({ line, beforeMoveIndex: trace.length });
+    },
   };
 
   try {
-    const fn = new Function('moveRight', 'moveLeft', 'moveUp', 'moveDown', 'wait', 'octopusNear', userCode);
-    fn(api.moveRight, api.moveLeft, api.moveUp, api.moveDown, api.wait, api.octopusNear);
+    const instrumented = instrumentForLoops(userCode);
+    const fn = new Function('moveRight', 'moveLeft', 'moveUp', 'moveDown', 'wait', 'octopusNear', '__mark', instrumented !== null ? instrumented : userCode);
+    fn(api.moveRight, api.moveLeft, api.moveUp, api.moveDown, api.wait, api.octopusNear, api.__mark);
   } catch (e) {
     error = e.message;
   }
 
-  return { trace, success: state.won, error };
+  return { trace, success: state.won, error, phaseEvents };
 }
 
 // World 5 — a maze scattered with switch terminals. Each is activated
@@ -1277,8 +1520,10 @@ function simulateVault(levelConfig, userCode) {
     won: false,
   };
   const trace = [{ row: state.row, col: state.col, switchesOn: state.switches.map((s) => s.on), event: 'start', tick: 0 }];
+  const phaseEvents = [];
   let error = null;
   let steps = 0;
+  let markCount = 0;
 
   function isFloor(r, c) {
     return r >= 0 && r < rows && c >= 0 && c < cols && grid[r][c] !== 'wall';
@@ -1324,16 +1569,22 @@ function simulateVault(levelConfig, userCode) {
     moveDown: () => step(state.row + 1, state.col, 'moveDown'),
     wait: () => step(state.row, state.col, 'wait'),
     switches: () => state.switches.map((s) => ({ row: s.row, col: s.col, on: s.on })),
+    __mark: (line) => {
+      markCount++;
+      if (markCount > 3000) throw new Error('Loop is running too long — check your loop condition.');
+      phaseEvents.push({ line, beforeMoveIndex: trace.length });
+    },
   };
 
   try {
-    const fn = new Function('moveRight', 'moveLeft', 'moveUp', 'moveDown', 'wait', 'switches', userCode);
-    fn(api.moveRight, api.moveLeft, api.moveUp, api.moveDown, api.wait, api.switches);
+    const instrumented = instrumentForLoops(userCode);
+    const fn = new Function('moveRight', 'moveLeft', 'moveUp', 'moveDown', 'wait', 'switches', '__mark', instrumented !== null ? instrumented : userCode);
+    fn(api.moveRight, api.moveLeft, api.moveUp, api.moveDown, api.wait, api.switches, api.__mark);
   } catch (e) {
     error = e.message;
   }
 
-  return { trace, success: state.won, error };
+  return { trace, success: state.won, error, phaseEvents };
 }
 
 // Exhaustive joint BFS over every octopus's position is exponential in the
@@ -1402,6 +1653,7 @@ class GridMazeRunner {
     this.stepElapsed = 0;
     this.playing = false;
     this.status = 'idle';
+    this.stepModeActive = false;
   }
 
   levelWidthPx() {
@@ -1423,6 +1675,7 @@ class GridMazeRunner {
   }
 
   update(dt) {
+    if (this.stepModeActive) return;
     if (this.playing) {
       this.stepElapsed += dt;
       if (this.stepElapsed >= GRID_STEP_TIME) {

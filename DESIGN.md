@@ -271,6 +271,75 @@ running" across several iterations rather than a single flash. Cached by
 source text so a 60fps render loop isn't re-parsing on every frame; an
 unparsable mid-edit code string just yields no outer-highlight, not a crash.
 
+**Step mode — pause for a click, see init/test/update as they happen.**
+The dim "enclosing line" trick above shows *that* a for-loop is running,
+but not the individual init/test/update moments a real for-loop actually
+goes through. Direct request, illustrated with `for(let i=0;i<2;i++){
+moveRight(); }`, expecting to see exactly: `let i=0`, `i<2`, `moveRight()`,
+`i++`, `i<2`, `moveRight()`, `i++`, `i<2` — eight distinct, clickable
+moments.
+
+*Instrumentation (`instrumentForLoops`, engine.js).* A for-loop header
+never calls any injected api function, so there's no stack-trace hook for
+its init/test/update individually the way there is for a move. Fixed by
+inserting `__mark(line)` calls into the header ONLY, via small in-place
+Acorn-offset insertions, never touching the body:
+- `__mark(initLine); ` is prepended immediately before the `for` keyword.
+- `test` is wrapped in place as `(__mark(testLine), (test))` — the comma
+  operator runs `__mark` for its side effect, then evaluates to `test`'s
+  own value, so the loop's real semantics are untouched.
+- `update` is wrapped the same way.
+
+The body is never sliced, moved, or reflowed. That was a real bug caught
+during testing: an earlier version rewrote the whole
+`for(init;test;update){body}` into `{ init; while(true){ test; body;
+update; } }`, using sliced original text for each piece — correct-looking,
+but it silently reflowed the body onto different lines than the original
+source, which broke `getCallerLine()` for every move/wait call inside a
+loop (it reports lines against whatever code actually ran, so a relocated
+body means wrong reported lines). Keeping every edit a small same-line
+insertion at a precise offset, and never moving the body at all, avoids
+that class of bug entirely — and as a side effect, works at any nesting
+depth for free, since no two for-loops' header edits can ever overlap,
+nested or not.
+
+`__mark` doesn't touch the movement trace or its `tick` numbering (which
+squid/scanner timing depends on) — it records a *separate* `phaseEvents`
+array, each entry noting `beforeMoveIndex` = `trace.length` at the instant
+it fired. `buildStepSequence(trace, phaseEvents)` merges both into one
+ordered list of "moments" by walking movement indices and flushing any
+phase events due before each one. All four simulate functions
+(`simulateSideScroller`/`simulateGridMaze`/`simulateGridMazeChase`/
+`simulateVault`) instrument the code, expose `__mark`, and return
+`phaseEvents` alongside the usual `trace`/`success`/`error`.
+
+*Playback (`createStepController`, engine.js).* A "Step" button next to
+Run on every world runs the same syntax-check + simulate pipeline, then
+hands the result to a step controller instead of auto-playing it — a
+"Next ▶" click advances exactly one merged step. `runner.stepModeActive`
+(checked by `update()` and `syncCodeHighlight`) tells the rest of the
+engine to stop auto-advancing on a timer and stop deriving the highlighted
+line from `trace`/`stepIndex` the normal way. A phase step only updates
+`stepModeLine` (no trace index exists for it); a move step also updates
+`lastMoveTraceIndex`. Both then set `runner.trace = fullTrace.slice(0,
+lastMoveTraceIndex + 1)` and `runner.stepIndex = lastMoveTraceIndex - 1` —
+truncating the runner's own trace view to exactly what's happened *so
+far*, rather than the negative stepIndex that would otherwise be needed to
+show "nothing has moved yet," which isn't possible: `playerPos()` always
+reads `trace[stepIndex]` unconditionally (even though its value is only
+mathematically relevant mid-interpolation), so a negative index would
+throw. Truncating also means switch/octopus/scanner rendering during step
+mode correctly only reflects moves that have actually happened, for free.
+
+When the sequence ends, `finish()` restores the untruncated trace and
+forces one more auto-play tick (`stepElapsed = 9999; playing = true`)
+rather than duplicating the win/status-computation branch — the very next
+`update()` call completes exactly the way a full Run would, so
+`recordClear`/achievements/the win check all fire identically regardless
+of whether the player watched it happen instantly or one click at a time.
+Verified end-to-end: stepped a real par-matching solution through to a win
+and confirmed `Progress.recordClear` fired with the right move count.
+
 ### World 5 — The Vault — built
 **Teaches:** arrays/objects.
 A bigger generated maze (`GridMazeRunner`, new `vault` theme — steel-blue,
@@ -318,13 +387,13 @@ finish, where a **helicopter is waiting outside** — the ending.
 
 Customizable from a panel on the splash screen (`index.html`): species
 ("skin" — capuchin, gorilla, manatee, proboscis monkey, or spider monkey),
-a fur color (most are flat, but "clouds" is a texture — a pale base plus a
-decorative overlay pass of white puffs, drawn once in `drawCharacter` so it
-doesn't have to be plumbed into every skin's own fill calls), and one
-cosmetic. Both colors and cosmetics can be locked behind a `requiresWorld`
-(same shape for both — `COLORS`/`ACCESSORIES` in `index.html` — checked via
-`Progress.getWorld(<id>).cleared` directly, one source of truth, no
-separate unlock flag).
+a flat fur color, and one cosmetic. Both colors and cosmetics can be locked
+behind a `requiresWorld` (same shape for both — `COLORS`/`ACCESSORIES` in
+`index.html` — checked via `Progress.getWorld(<id>).cleared` directly, one
+source of truth, no separate unlock flag) — a color texture (not just a
+flat fill) was tried once (`clouds`, a decorative overlay pass) and then
+removed on direct request; `drawCharacter`'s per-skin dispatch stayed a
+clean fit for flat colors only after that.
 `Progress.getCharacter()`/`setCharacter()` store the choice in localStorage,
 deliberately outside `resetAll()` — it's a cosmetic preference, not
 progress, so "reset progress" doesn't silently undo it. Unlockable
