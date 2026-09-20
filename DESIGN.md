@@ -27,14 +27,47 @@ an animation. This keeps early worlds simple (no async/await required to
 write a solution) while still supporting real loops and conditionals, since
 those are evaluated at trace-build time against known level state.
 
-**Open question for later worlds:** World 3 (reactive dodging) and World 6
-(the boss) want the player reacting to *live, possibly nondeterministic*
-game state (e.g. a monster whose timing isn't fully fixed), which a
-build-then-replay trace can't represent. When we get there we'll likely need
-a second execution mode — running the player's function as a live
-interpreted loop (or an async function awaiting engine-driven ticks) — rather
-than trying to force everything through the simple trace model. Not solved
-yet; flagging so it doesn't get glossed over.
+**Resolved:** the "reactive dodging" open question turned out not to need a
+second execution mode. World 3's octopus chases greedily (shortest path
+toward the player's cell, recomputed after every move), which sounds "live"
+but is actually a pure function of the player's already-decided move
+sequence — so it's fully computable during the same synchronous trace-build
+pass as everything else (`simulateGridMazeChase`). `octopusNear()` reads
+real state *as of that point in the simulated trace*, same as any other
+query function would. The only time this stops working is if a future
+world's obstacle depends on something the simulator doesn't control (real
+wall-clock time, true randomness) — not the case for anything built so far.
+World 6's boss will need to be re-examined against this once designed, but
+the model itself no longer looks like the blocker it did.
+
+**Procedural, seeded levels:** every level is generated from
+`Progress.getSeed(worldId)` — a random seed picked once and stuck to a
+player (localStorage), not re-rolled every reload. `js/engine.js` provides
+`mulberry32` (seeded PRNG), `shuffleWithRng`, and `generateMaze` (recursive-
+backtracker perfect maze on a wall/floor tile grid — shared by World 2 and
+3). Every generator verifies solvability with the matching BFS solver
+(`computeMinMoves`/`computeMinMovesGrid`/`computeMinMovesGridChase`) before
+accepting a layout, regenerating or falling back if it comes up `Infinity`.
+Because par is no longer a fixed number, it's computed at load time and
+cached via `Progress.setWorldPar` so World Select can show it without
+re-running that world's generator.
+
+**Gotcha worth remembering:** a perfect maze (`generateMaze`) has exactly
+one route between any two cells — no loops, so nothing to circle around. An
+enemy that always moves *at the player's speed* toward the player's exact
+position can therefore corner them with zero possible escape if it starts
+anywhere near the direct route; this isn't a rare edge case, it's most
+placements. Two independent fixes were needed together: the chaser moves at
+*half* the player's speed (so a direct run can always outrun it), and it's
+placed in a dead-end branch *off* the solution path rather than on it (so it
+has to travel to intercept, not just walk straight at the player). Either
+fix alone still produced unsolvable layouts in testing.
+
+**Syntax errors get located, not just reported:** `findSyntaxError` (engine.js)
+parses the code with Acorn (CDN) before ever running it, since a thrown
+`SyntaxError` from `new Function(...)` doesn't reliably carry a usable line
+number across browsers. The offending line gets a background tint and the
+token an underline in CodeMirror, cleared on the next edit.
 
 ## Stack
 
@@ -101,16 +134,20 @@ out what it takes.
 Low stakes, no enemies. Getting oriented: code = control. Two gaps to clear
 by jumping prove that order and precision matter. Real gravity-driven jump
 arc and fall animation, a scrolling camera, and a moody parallax sci-fi-wreck
-background — see the commit history for the physics/graphics pass.
+background — see the commit history for the physics/graphics pass. Course
+length and gap placement are now seeded-random per player (gaps spaced >=3
+columns apart by construction, so a jump can always clear exactly one).
 
 ### World 2 — The Vents (top-down maze) — built
 **Teaches:** loops.
-An L-shaped vent shaft: 9 cells right, then 5 up. The maze is long enough
-that writing out every individual move by hand is miserable — `for`/`while`
-loops stop being abstract and start being obviously necessary. First enemy:
-a "Scanner" that patrols a fixed back-and-forth path along the floor,
-deterministic per tick (so it stays inside the simulate-then-replay model,
-no live execution needed). Its phase is tuned so the *naive* straight-loop
+A real generated maze now (`generateMaze`, seeded per player), not just a
+straight shaft — long enough that writing out every individual move by hand
+is miserable, and now with actual branches/dead-ends, so `for`/`while` loops
+stop being abstract and start being obviously necessary. The patrol enemy
+(visually a small drone) patrols a fixed back-and-forth path along a segment
+of the solution corridor, deterministic per tick (stays inside the
+simulate-then-replay model, no live execution needed). The generator tries
+several phase/window choices and prefers one where the *naive* straight-loop
 solution actually walks into it — clearing the level requires either
 reordering moves or spending a `wait()` to change timing, which is the
 point: the puzzle isn't solved by "loops exist," it's solved by noticing
@@ -128,17 +165,25 @@ General principle for future worlds: a puzzle being *solvable* isn't the
 same as it being *debuggable* — always show the player enough state to
 know why an attempt failed, not just that it did.
 
-### World 3 — The Dungeon Halls (mixed side-scroller/maze, 3 areas) — not built
+### World 3 — The Dungeon Halls — MVP built, full vision not yet
 **Teaches:** conditionals.
-The tech gives way to something organic — a **mutated tentacle-flesh
-creature** tangled through the server racks and stone, actively hunting you.
-Three areas, each **progressively bigger** than the last. In each area you
-must find a hidden key before you can unlock the door to the next area.
-Conditionals have a real reason to exist here: `if (hasKey) unlockDoor()`,
-`if (tentacleNear()) hide()`, checking state before acting rather than
-executing a fixed script. Area 3 (the biggest) is where the creature should
-corner you at least once before you find the last key — the game's first
-real scare.
+What's actually built: a single generated maze (`simulateGridMazeChase`)
+with a small, cartoonish octopus that greedily chases the player — one step
+toward your current cell after every move you make, at half your speed (see
+the maze-topology gotcha above for why). `octopusNear()` exposes whether
+it's within 2 tiles right now, which is the hook for conditionals:
+`if (octopusNear()) { ... }` lets the player react to state instead of
+committing to a fixed script.
+
+**Not built yet — original fuller vision, still the intent:** the tech
+giving way to something organic — a **mutated tentacle-flesh creature**
+tangled through the server racks and stone — three areas, each
+**progressively bigger** than the last, each requiring a hidden key found
+before the door to the next area unlocks (`if (hasKey) unlockDoor()`), with
+the creature cornering the player at least once in the biggest area for the
+game's first real scare. The current MVP proves the chase mechanic works;
+the key-hunt/multi-area structure is the next pass on this world, not a
+replacement for it.
 
 ### World 4 — The Foundry (mixed) — not built
 **Teaches:** functions.
@@ -170,10 +215,13 @@ finish, where a **helicopter is waiting outside** — the ending.
 - `js/engine.js` — shared engine: level simulation (side-scroller and grid
   maze), par/BFS helpers, trace playback, rendering. Reused across worlds;
   world-specific level data stays in each world's own folder.
-- `js/progress.js` — localStorage save data (clears, best moves, unlocked
-  command-palette snippets).
-- `js/worlds-registry.js` — static ordered metadata for all six worlds,
-  including each built world's `parMoves`.
+- `js/progress.js` — localStorage save data: clears, best moves, per-world
+  seed and generated par, unlocked command-palette snippets, achievements.
+- `js/worlds-registry.js` — static ordered metadata for all six worlds. Its
+  `parMoves` is only a placeholder shown before a player has ever generated
+  that world's real (seeded) layout.
+- `js/achievements.js` — the badge catalog, plus the one cross-world check
+  (`escapee`). Per-world detection lives in each world's own script.
 - `css/style.css` — shared theme.
-- No build step. No dependencies beyond p5.js and CodeMirror (theme:
-  `dracula`), both loaded from CDN.
+- No build step. Dependencies (all CDN): p5.js, CodeMirror (theme:
+  `dracula`), and Acorn (syntax-error line/column detection only).

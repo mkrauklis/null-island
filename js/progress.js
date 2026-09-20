@@ -7,6 +7,7 @@
 const PROGRESS_KEY = 'null-island:progress:v1';
 const SNIPPETS_KEY = 'null-island:snippets:v1';
 const ACHIEVEMENTS_KEY = 'null-island:achievements:v1';
+const SEEDS_KEY = 'null-island:seeds:v1';
 
 const Progress = {
   _load(key) {
@@ -27,24 +28,49 @@ const Progress = {
 
   getWorld(worldId) {
     const all = this._load(PROGRESS_KEY) || {};
-    return all[worldId] || { cleared: false, bestMoves: null };
+    return all[worldId] || { cleared: false, bestMoves: null, parMoves: null };
   },
 
   // Records a clear, keeping the lowest move count ever achieved. Returns
-  // the updated { cleared, bestMoves } for that world.
+  // the updated { cleared, bestMoves, parMoves } for that world.
   recordClear(worldId, moves) {
     const all = this._load(PROGRESS_KEY) || {};
-    const prev = all[worldId] || { cleared: false, bestMoves: null };
+    const prev = all[worldId] || { cleared: false, bestMoves: null, parMoves: null };
     const bestMoves = prev.bestMoves === null ? moves : Math.min(prev.bestMoves, moves);
-    all[worldId] = { cleared: true, bestMoves };
+    all[worldId] = { ...prev, cleared: true, bestMoves };
     this._save(PROGRESS_KEY, all);
     return all[worldId];
+  },
+
+  // Levels are procedurally generated per player (see getSeed) so par isn't
+  // a fixed constant — this caches the current layout's par alongside that
+  // world's progress so World Select can show it without re-running that
+  // world's whole generator.
+  setWorldPar(worldId, parMoves) {
+    const all = this._load(PROGRESS_KEY) || {};
+    const prev = all[worldId] || { cleared: false, bestMoves: null, parMoves: null };
+    all[worldId] = { ...prev, parMoves };
+    this._save(PROGRESS_KEY, all);
+  },
+
+  // A per-world random seed, picked once and stuck to, so a player's layout
+  // (and their best-moves history against it) stays stable across replays.
+  getSeed(worldId) {
+    const seeds = this._load(SEEDS_KEY) || {};
+    if (seeds[worldId] == null) {
+      seeds[worldId] = Math.floor(Math.random() * 2 ** 31);
+      this._save(SEEDS_KEY, seeds);
+    }
+    return seeds[worldId];
   },
 
   isUnlocked(worldId, worldsInOrder) {
     const index = worldsInOrder.findIndex((w) => w.id === worldId);
     if (index <= 0) return true;
-    return this.getWorld(worldsInOrder[index - 1].id).cleared;
+    for (let i = 0; i < index; i++) {
+      if (!this.getWorld(worldsInOrder[i].id).cleared) return false;
+    }
+    return true;
   },
 
   getUnlockedSnippets() {
@@ -79,6 +105,7 @@ const Progress = {
       localStorage.removeItem(PROGRESS_KEY);
       localStorage.removeItem(SNIPPETS_KEY);
       localStorage.removeItem(ACHIEVEMENTS_KEY);
+      localStorage.removeItem(SEEDS_KEY);
     } catch (e) {
       // ignore
     }

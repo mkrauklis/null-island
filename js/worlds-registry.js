@@ -1,8 +1,8 @@
-// Static metadata for every world in the game. `parMoves` is the true
-// minimum move count for that level, computed once via the engine's BFS
-// helpers (see DESIGN.md) and pinned here as a plain number so the world
-// select screen can show "best / par" without loading each level's game
-// code just to compute it.
+// Static metadata for every world in the game. Levels are now procedurally
+// generated per player (see Progress.getSeed/setWorldPar), so `parMoves`
+// here is only a rough placeholder shown before a player has ever opened
+// that world — once they have, worlds.html prefers the real par cached in
+// Progress for their actual generated layout.
 const WORLDS = [
   {
     id: 'world1',
@@ -10,7 +10,7 @@ const WORLDS = [
     concept: 'Sequential commands',
     path: 'levels/world1/index.html',
     built: true,
-    parMoves: 6,
+    parMoves: 7,
   },
   {
     id: 'world2',
@@ -18,15 +18,15 @@ const WORLDS = [
     concept: 'Loops',
     path: 'levels/world2/index.html',
     built: true,
-    parMoves: 15,
+    parMoves: 20,
   },
   {
     id: 'world3',
     title: 'The Dungeon Halls',
     concept: 'Conditionals',
-    path: null,
-    built: false,
-    parMoves: null,
+    path: 'levels/world3/index.html',
+    built: true,
+    parMoves: 12,
   },
   {
     id: 'world4',

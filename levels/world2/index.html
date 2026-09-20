@@ -7,11 +7,12 @@
 <link rel="stylesheet" href="../../css/style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/acorn/8.11.3/acorn.min.js"></script>
 </head>
 <body>
 <header class="hero" style="padding:2rem 1.5rem 1rem;">
   <h1 style="font-size:1.8rem;">World 2 — The Vents</h1>
-  <p>A long vent shaft: right along the floor grate, then up through the riser to the exit. A Scanner patrols the floor — time your run, or wait it out.</p>
+  <p>A real vent maze this time, not just a straight shaft. A patrol drone sweeps part of it — time your run, or wait it out.</p>
 </header>
 <div class="wrap">
   <p style="text-align:center;"><a href="../../worlds.html">&larr; back to World Select</a></p>
@@ -28,18 +29,15 @@
     </div>
     <div class="panel editor-panel">
       <h2>Your code</h2>
-      <textarea id="code">// You're 9 steps right and 5 steps up from the exit grate.
-// A Scanner patrols the floor ahead of you.
+      <textarea id="code">// Find your way from the grate to the exit.
 // Typing every move by hand would take forever — try a for loop:
 // for (let i = 0; i < 3; i++) { moveRight(); }
 moveRight();
 </textarea>
+      <div class="hint" id="level-hint"></div>
       <div class="hint">
-        Stay on the lit grate panels — that's the only surface here, the
-        rest is open shaft. Writing 9 individual moves is painful — that's
-        the point. A loop does it in one.<br><br>
-        The Scanner takes exactly one step every time <em>you</em> take a
-        step — including <code>wait()</code>. If it catches you, the fix
+        The patrol drone takes exactly one step every time <em>you</em> take
+        a step — including <code>wait()</code>. If it catches you, the fix
         usually isn't a different path, it's changing <em>when</em> you
         start moving: try adding a <code>wait()</code> before your loop.
       </div>

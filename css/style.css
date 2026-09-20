@@ -109,6 +109,16 @@ header.hero p {
   font-size: 0.95rem;
 }
 
+.cm-error-line {
+  background: rgba(224, 84, 107, 0.22) !important;
+}
+
+.cm-error-text {
+  border-bottom: 2px wavy var(--danger);
+  text-decoration: underline wavy var(--danger);
+  text-decoration-skip-ink: none;
+}
+
 .controls {
   margin-top: 0.75rem;
   display: flex;

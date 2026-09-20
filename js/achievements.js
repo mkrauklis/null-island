@@ -6,6 +6,7 @@ const ACHIEVEMENTS = [
   { id: 'looper', title: 'Automator', icon: '\u{1F501}', description: 'Use a loop to clear a level.' },
   { id: 'compass', title: 'Compass Rose', icon: '\u{1F9ED}', description: 'Use all four directions — up, down, left, right — in one clear.' },
   { id: 'patient', title: 'Patience', icon: '\u{23F3}', description: 'Use wait() to clear a level.' },
+  { id: 'decider', title: 'Decision Maker', icon: '\u{1F914}', description: 'Use an if statement to clear a level.' },
   { id: 'backtracker', title: 'Second Thoughts', icon: '\u{21A9}\u{FE0F}', description: 'Move backward and still reach the goal.' },
   { id: 'perfectionist', title: 'Perfectionist', icon: '\u{2B50}', description: 'Clear a level in par — the fewest possible moves.' },
   { id: 'escapee', title: 'Island Escapee', icon: '\u{1F3DD}\u{FE0F}', description: 'Clear every world currently on the island.' },

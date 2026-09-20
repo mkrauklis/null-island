@@ -61,11 +61,12 @@ function renderGrid() {
     wrapper.appendChild(status);
 
     if (unlocked && world.built && state.cleared) {
+      const par = state.parMoves !== null && state.parMoves !== undefined ? state.parMoves : world.parMoves;
       const score = document.createElement('div');
       score.className = 'score-line';
-      const starred = world.parMoves !== null && state.bestMoves <= world.parMoves;
+      const starred = par !== null && state.bestMoves <= par;
       score.innerHTML = `Best: ${state.bestMoves} moves` +
-        (world.parMoves !== null ? ` (par ${world.parMoves})` : '') +
+        (par !== null ? ` (par ${par})` : '') +
         (starred ? ' <span class="star">&#9733;</span>' : '');
       wrapper.appendChild(score);
     }

@@ -1,13 +1,31 @@
 // World 1 — The Wreck. Sequential commands only: moveRight(), moveLeft(), jump().
+// Layout is procedurally generated from a per-player seed (see Progress.getSeed)
+// so it's randomized but stable for that player, and always solvable by
+// construction: gaps are spaced >=3 apart, so a 2-tile jump can always clear
+// exactly one of them without ever landing on another.
 const WORLD_ID = 'world1';
-const LEVEL = {
-  startCol: 0,
-  columns: [
-    'ground', 'ground', 'ground', 'gap', 'ground', 'ground', 'ground',
-    'gap', 'ground', 'ground', 'ground', 'goal',
-  ],
-};
-LEVEL.parMoves = computeMinMoves(LEVEL);
+
+function generateLevel(seed) {
+  const rng = mulberry32(seed);
+  const length = 10 + Math.floor(rng() * 7); // 10..16 columns
+  const columns = new Array(length).fill('ground');
+  const gapCount = 2 + Math.floor(rng() * 2); // 2..3 gaps
+  const gapCols = [];
+  let attempts = 0;
+  while (gapCols.length < gapCount && attempts < 200) {
+    attempts++;
+    const c = 2 + Math.floor(rng() * (length - 4));
+    if (gapCols.every((g) => Math.abs(g - c) >= 3)) gapCols.push(c);
+  }
+  gapCols.forEach((c) => { columns[c] = 'gap'; });
+  columns[length - 1] = 'goal';
+  const level = { startCol: 0, columns };
+  level.parMoves = computeMinMoves(level);
+  return level;
+}
+
+const LEVEL = generateLevel(Progress.getSeed(WORLD_ID));
+Progress.setWorldPar(WORLD_ID, LEVEL.parMoves);
 
 const COMMANDS = [
   { id: 'moveRight', label: 'moveRight()', insert: 'moveRight();\n', pattern: /moveRight\s*\(/ },
@@ -20,6 +38,7 @@ let editor;
 let lastFrameMs;
 let lastStatus = null;
 let resultCache = null;
+let errorLine = null;
 
 function sketch(p) {
   p.setup = () => {
@@ -76,7 +95,9 @@ function renderStatus() {
       statusEl.textContent = 'You fell in a gap. Edit your code and run again.';
       break;
     case 'error':
-      statusEl.textContent = 'Error: ' + runner.errorMessage;
+      statusEl.textContent = errorLine
+        ? `Syntax error on line ${errorLine}: ${runner.errorMessage}`
+        : 'Error: ' + runner.errorMessage;
       break;
     case 'playing':
       statusEl.textContent = 'Running...';
@@ -113,9 +134,9 @@ function insertSnippet(text) {
 
 function checkForNewlyTypedCommands() {
   const code = stripComments(editor.getValue());
-  let unlockedNow = Progress.getUnlockedSnippets();
   let changed = false;
   COMMANDS.forEach((cmd) => {
+    const unlockedNow = Progress.getUnlockedSnippets();
     if (!unlockedNow.includes(cmd.id) && cmd.pattern.test(code)) {
       Progress.unlockSnippet(cmd.id);
       changed = true;
@@ -131,31 +152,60 @@ function checkAchievements() {
     const { isNew } = Progress.unlockAchievement(id);
     if (isNew) newly.push(id);
   };
-
   if (/jump\s*\(/.test(code)) record('jumper');
   if (/moveLeft\s*\(/.test(code)) record('backtracker');
   if (resultCache.starred) record('perfectionist');
-
   const escapee = checkEscapeeAchievement(WORLDS);
   if (escapee.isNew) newly.push('escapee');
-
   announceAchievements(newly);
+}
+
+let errorMark = null;
+function clearSyntaxHighlight() {
+  if (errorMark) { errorMark.clear(); errorMark = null; }
+  if (errorLine !== null) { editor.removeLineClass(errorLine, 'background', 'cm-error-line'); }
+  errorLine = null;
+}
+
+function highlightSyntaxError(err) {
+  clearSyntaxHighlight();
+  const line = Math.max(0, err.line - 1);
+  const lineText = editor.getLine(line) || '';
+  const from = { line, ch: Math.min(err.column, lineText.length) };
+  const to = { line, ch: lineText.length };
+  errorMark = editor.markText(from, to, { className: 'cm-error-text' });
+  editor.addLineClass(line, 'background', 'cm-error-line');
+  errorLine = line + 1;
 }
 
 function runCode() {
   const code = editor.getValue();
+  clearSyntaxHighlight();
+  const syntaxErr = findSyntaxError(code);
+  if (syntaxErr) {
+    highlightSyntaxError(syntaxErr);
+    runner.loadTrace([{ col: LEVEL.startCol, event: 'start' }], false, syntaxErr.message);
+    return;
+  }
   const { trace, success, error } = simulateSideScroller(LEVEL, code);
   runner.loadTrace(trace, success, error);
 }
 
 window.addEventListener('DOMContentLoaded', () => {
+  const gapCount = LEVEL.columns.filter((t) => t === 'gap').length;
+  document.getElementById('level-hint').textContent =
+    `The flag is ${LEVEL.columns.length - 1} steps from the start, with ${gapCount} gaps along the way.`;
+
   editor = CodeMirror.fromTextArea(document.getElementById('code'), {
     mode: 'javascript',
     theme: 'dracula',
     lineNumbers: true,
     tabSize: 2,
   });
-  editor.on('change', checkForNewlyTypedCommands);
+  editor.on('change', () => {
+    clearSyntaxHighlight();
+    checkForNewlyTypedCommands();
+  });
   checkForNewlyTypedCommands();
   renderCommandPalette();
   renderWorldMeta();

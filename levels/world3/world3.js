@@ -1,5 +1,9 @@
-// World 2 — The Vents. Loops. A real generated maze with a patrol drone.
-const WORLD_ID = 'world2';
+// World 3 — The Dungeon Halls (MVP slice). Conditionals. A generated maze
+// with a small octopus that chases you — greedy shortest-path toward your
+// current position, recomputed after every move you make. Still fully
+// deterministic and simulate-at-build-time, same as every other world: see
+// DESIGN.md.
+const WORLD_ID = 'world3';
 
 function bfsPath(grid, start, goal) {
   const rows = grid.length;
@@ -31,39 +35,41 @@ function bfsPath(grid, start, goal) {
 
 function generateLevel(seed) {
   const rng = mulberry32(seed);
-  const mazeRows = 3 + Math.floor(rng() * 2); // 3..4 cells
-  const mazeCols = 6 + Math.floor(rng() * 3); // 6..8 cells
+  const mazeRows = 3;
+  const mazeCols = 5 + Math.floor(rng() * 2); // 5..6 cells — a bit more room for dead ends
   const grid = generateMaze(mazeRows, mazeCols, rng);
   const start = { row: grid.length - 2, col: 1 };
   const goal = { row: 1, col: grid[0].length - 2 };
   const solutionPath = bfsPath(grid, start, goal);
+  const onPath = new Set(solutionPath.map((c) => `${c.row},${c.col}`));
 
-  const patrolLen = 3 + Math.floor(rng() * 3); // 3..5 cells
-  const maxStart = Math.max(1, solutionPath.length - patrolLen - 2);
-  let best = null;
-  const tryOrder = shuffleWithRng([...Array(Math.max(1, maxStart)).keys()], rng);
-  for (const windowStart of tryOrder) {
-    const window = solutionPath.slice(windowStart + 1, windowStart + 1 + patrolLen);
-    if (window.length < 2) continue;
-    const forward = window;
-    const backward = window.slice(1, -1).reverse();
-    const bounce = forward.concat(backward);
-    for (const phase of shuffleWithRng([...Array(bounce.length).keys()], rng)) {
-      const rotated = bounce.slice(phase).concat(bounce.slice(0, phase));
-      const level = { grid, start, goal, scanner: { path: rotated } };
-      const par = computeMinMovesGrid(level);
-      if (par === Infinity) continue;
-      const collides = solutionPath.some((cell, i) => {
-        if (i === 0) return false;
-        const s = scannerPositionAt(level.scanner, i);
-        return s.row === cell.row && s.col === cell.col;
-      });
-      if (collides) { level.parMoves = par; best = level; break; }
-      if (!best) { level.parMoves = par; best = level; }
+  // A perfect maze (recursive backtracker) has exactly one route between
+  // any two points, so an octopus that starts ON that route can simply
+  // walk straight at the player with no way for them to get around it —
+  // that's the "Par: Infinity" bug this fixes. Starting it in a dead-end
+  // branch instead means the player only has to worry about it near that
+  // branch's junction, not the whole route.
+  const offPathCells = [];
+  for (let r = 1; r < grid.length; r += 2) {
+    for (let c = 1; c < grid[0].length; c += 2) {
+      if (grid[r][c] === 'floor' && !onPath.has(`${r},${c}`)) offPathCells.push({ row: r, col: c });
     }
-    if (best && best.parMoves !== undefined) break;
   }
-  return best;
+
+  const candidates = shuffleWithRng(offPathCells.length ? offPathCells : solutionPath.slice(1, -1), rng);
+  for (const octopusStart of candidates) {
+    const level = { grid, start, goal, octopusStart };
+    const par = computeMinMovesGridChase(level);
+    if (par !== Infinity) {
+      level.parMoves = par;
+      return level;
+    }
+  }
+  // Last resort (shouldn't normally hit this): tuck it in the corner
+  // farthest from both start and goal.
+  const level = { grid, start, goal, octopusStart: { row: grid.length - 2, col: grid[0].length - 2 } };
+  level.parMoves = computeMinMovesGridChase(level);
+  return level;
 }
 
 const LEVEL = generateLevel(Progress.getSeed(WORLD_ID));
@@ -75,7 +81,8 @@ const COMMANDS = [
   { id: 'moveUp', label: 'moveUp()', insert: 'moveUp();\n', pattern: /moveUp\s*\(/ },
   { id: 'moveDown', label: 'moveDown()', insert: 'moveDown();\n', pattern: /moveDown\s*\(/ },
   { id: 'wait', label: 'wait()', insert: 'wait();\n', pattern: /wait\s*\(/ },
-  { id: 'forLoop', label: 'for loop', insert: 'for (let i = 0; i < 3; i++) {\n  \n}\n', pattern: /for\s*\(/ },
+  { id: 'ifStatement', label: 'if (...)', insert: 'if (octopusNear()) {\n  \n}\n', pattern: /if\s*\(/ },
+  { id: 'octopusNear', label: 'octopusNear()', insert: 'octopusNear()', pattern: /octopusNear\s*\(/ },
 ];
 
 let runner;
@@ -87,9 +94,9 @@ let errorLine = null;
 
 function sketch(p) {
   p.setup = () => {
-    const canvas = p.createCanvas(480, 384);
+    const canvas = p.createCanvas(440, 360);
     canvas.parent('level-canvas-holder');
-    runner = new GridMazeRunner(p, LEVEL, { tile: 40, viewportW: 480, viewportH: 384 });
+    runner = new GridMazeRunner(p, LEVEL, { tile: 40, viewportW: 440, viewportH: 360 });
     lastFrameMs = performance.now();
   };
 
@@ -133,17 +140,17 @@ function renderStatus() {
   switch (runner.status) {
     case 'won': {
       const r = resultCache;
-      statusEl.textContent = `Made it to the grate in ${r.moves} moves — best ${r.bestMoves}${r.starred ? ' ★' : ''} (par ${LEVEL.parMoves}).`;
+      statusEl.textContent = `Escaped the hall in ${r.moves} moves — best ${r.bestMoves}${r.starred ? ' ★' : ''} (par ${LEVEL.parMoves}).`;
       break;
     }
     case 'blocked': {
       const last = runner.trace[runner.trace.length - 1];
-      statusEl.textContent = `Move ${last.tick}: that's not part of the grate — you hit a wall (row ${last.row}, col ${last.col}). Edit your code and run again.`;
+      statusEl.textContent = `Move ${last.tick}: that's a wall (row ${last.row}, col ${last.col}). Edit your code and run again.`;
       break;
     }
     case 'caught': {
       const last = runner.trace[runner.trace.length - 1];
-      statusEl.textContent = `Move ${last.tick}: the drone caught you at (row ${last.row}, col ${last.col}). Try changing when you start moving, not just how — a wait() shifts your timing by one tick.`;
+      statusEl.textContent = `Move ${last.tick}: the octopus got you at (row ${last.row}, col ${last.col}). It always takes the shortest path toward wherever you just moved — try checking octopusNear() before you commit to a move.`;
       break;
     }
     case 'error':
@@ -204,13 +211,9 @@ function checkAchievements() {
     const { isNew } = Progress.unlockAchievement(id);
     if (isNew) newly.push(id);
   };
-  if (/for\s*\(|while\s*\(/.test(code)) record('looper');
+  if (/if\s*\(/.test(code)) record('decider');
   if (/wait\s*\(/.test(code)) record('patient');
   if (/moveLeft\s*\(/.test(code)) record('backtracker');
-  const actionsUsed = new Set(runner.trace.map((t) => t.action));
-  if (['moveUp', 'moveDown', 'moveLeft', 'moveRight'].every((a) => actionsUsed.has(a))) {
-    record('compass');
-  }
   if (resultCache.starred) record('perfectionist');
   const escapee = checkEscapeeAchievement(WORLDS);
   if (escapee.isNew) newly.push('escapee');
@@ -244,13 +247,13 @@ function runCode() {
     runner.loadTrace([{ row: LEVEL.start.row, col: LEVEL.start.col, event: 'start', tick: 0 }], false, syntaxErr.message);
     return;
   }
-  const { trace, success, error } = simulateGridMaze(LEVEL, code);
+  const { trace, success, error } = simulateGridMazeChase(LEVEL, code);
   runner.loadTrace(trace, success, error);
 }
 
 window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('level-hint').textContent =
-    `Stay on the lit grate panels — that's the only surface here. It's a real maze this time (par is ${LEVEL.parMoves} moves), so you may need to explore before you find the way through.`;
+    `Par is ${LEVEL.parMoves} moves. octopusNear() tells you if it's within 2 tiles right now — use it to decide your next move instead of committing to a fixed script.`;
 
   editor = CodeMirror.fromTextArea(document.getElementById('code'), {
     mode: 'javascript',

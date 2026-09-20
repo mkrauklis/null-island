@@ -2,17 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>World 1 — The Wreck — Null Island</title>
+<title>World 3 — The Dungeon Halls — Null Island</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="../../css/style.css">
+<style>:root { --accent: #b455cd; --accent-dim: #6d2d7f; }</style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/acorn/8.11.3/acorn.min.js"></script>
 </head>
 <body>
 <header class="hero" style="padding:2rem 1.5rem 1rem;">
-  <h1 style="font-size:1.8rem;">World 1 — The Wreck</h1>
-  <p>The ship is scrap. There's a gap in the hull plating ahead — you'll need to jump it. Write code to walk your character to the flag.</p>
+  <h1 style="font-size:1.8rem;">World 3 — The Dungeon Halls</h1>
+  <p>The tech gives way to something organic. A small octopus is loose in the stonework, and it's coming straight for you — the moment you move, it moves too.</p>
 </header>
 <div class="wrap">
   <p style="text-align:center;"><a href="../../worlds.html">&larr; back to World Select</a></p>
@@ -29,9 +30,8 @@
     </div>
     <div class="panel editor-panel">
       <h2>Your code</h2>
-      <textarea id="code">// Get to the flag. moveRight() walks one step.
-// jump() leaps two steps forward, clearing a gap.
-moveRight();
+      <textarea id="code">// octopusNear() is true if it's within 2 tiles of you right now.
+// if (octopusNear()) { ... } lets you react instead of guessing.
 moveRight();
 </textarea>
       <div class="hint" id="level-hint"></div>
@@ -49,6 +49,6 @@ moveRight();
 <script src="../../js/progress.js"></script>
 <script src="../../js/worlds-registry.js"></script>
 <script src="../../js/achievements.js"></script>
-<script src="world1.js"></script>
+<script src="world3.js"></script>
 </body>
 </html>
