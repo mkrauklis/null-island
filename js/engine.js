@@ -1170,6 +1170,85 @@ function simulateGridMazeChase(levelConfig, userCode) {
   return { trace, success: state.won, error };
 }
 
+// World 5 — a maze scattered with switch terminals. Each is activated
+// automatically just by standing on its tile (same physicality as the
+// goal — no separate "activate" action), and reaching the goal only counts
+// once every switch is on; otherwise it's 'goal-incomplete' so the player
+// knows exactly how many are left, same honesty principle as World 3's
+// 'goal-unearned'. switches() is a read-only query (doesn't consume a
+// tick, same contract as octopusNear()) returning a snapshot array of
+// {row, col, on} objects — the array-of-objects hook this world teaches.
+function simulateVault(levelConfig, userCode) {
+  const { grid, start, goal, switches } = levelConfig;
+  const rows = grid.length;
+  const cols = grid[0].length;
+  const state = {
+    row: start.row,
+    col: start.col,
+    switches: switches.map((s) => ({ ...s, on: false })),
+    finished: false,
+    won: false,
+  };
+  const trace = [{ row: state.row, col: state.col, switchesOn: state.switches.map((s) => s.on), event: 'start', tick: 0 }];
+  let error = null;
+  let steps = 0;
+
+  function isFloor(r, c) {
+    return r >= 0 && r < rows && c >= 0 && c < cols && grid[r][c] !== 'wall';
+  }
+  function guard() {
+    steps++;
+    if (steps > MAX_STEPS) throw new Error('Too many moves — check for an infinite loop.');
+  }
+  function activateHere() {
+    state.switches.forEach((s) => {
+      if (s.row === state.row && s.col === state.col) s.on = true;
+    });
+  }
+
+  function step(newRow, newCol, action) {
+    guard();
+    if (state.finished) return;
+    const tick = trace.length;
+    const line = getCallerLine();
+    if (!isFloor(newRow, newCol)) {
+      state.finished = true;
+      trace.push({ row: newRow, col: newCol, switchesOn: state.switches.map((s) => s.on), event: 'blocked', action, tick, line });
+      return;
+    }
+    state.row = newRow;
+    state.col = newCol;
+    activateHere();
+    const atGoal = newRow === goal.row && newCol === goal.col;
+    if (atGoal) {
+      state.finished = true;
+      const allOn = state.switches.every((s) => s.on);
+      if (allOn) state.won = true;
+      trace.push({ row: newRow, col: newCol, switchesOn: state.switches.map((s) => s.on), event: allOn ? 'goal' : 'goal-incomplete', action, tick, line });
+      return;
+    }
+    trace.push({ row: newRow, col: newCol, switchesOn: state.switches.map((s) => s.on), event: 'move', action, tick, line });
+  }
+
+  const api = {
+    moveRight: () => step(state.row, state.col + 1, 'moveRight'),
+    moveLeft: () => step(state.row, state.col - 1, 'moveLeft'),
+    moveUp: () => step(state.row - 1, state.col, 'moveUp'),
+    moveDown: () => step(state.row + 1, state.col, 'moveDown'),
+    wait: () => step(state.row, state.col, 'wait'),
+    switches: () => state.switches.map((s) => ({ row: s.row, col: s.col, on: s.on })),
+  };
+
+  try {
+    const fn = new Function('moveRight', 'moveLeft', 'moveUp', 'moveDown', 'wait', 'switches', userCode);
+    fn(api.moveRight, api.moveLeft, api.moveUp, api.moveDown, api.wait, api.switches);
+  } catch (e) {
+    error = e.message;
+  }
+
+  return { trace, success: state.won, error };
+}
+
 // Exhaustive joint BFS over every octopus's position is exponential in the
 // number of octopi, so with 3+ chasers it's intractable. Instead this
 // constructs *a* working solution with a greedy reactive policy (prefer
@@ -1268,6 +1347,7 @@ class GridMazeRunner {
           if (this.errorMessage) this.status = 'error';
           else if (last.event === 'goal') this.status = 'won';
           else if (last.event === 'goal-unearned') this.status = 'goal-unearned';
+          else if (last.event === 'goal-incomplete') this.status = 'goal-incomplete';
           else if (last.event === 'blocked') this.status = 'blocked';
           else if (last.event === 'caught') this.status = 'caught';
           else this.status = 'idle';
@@ -1336,11 +1416,13 @@ class GridMazeRunner {
     p.background(
       this.theme === 'dungeon' ? this.p.color(14, 9, 8) :
       this.theme === 'foundry' ? this.p.color(20, 12, 7) :
+      this.theme === 'vault' ? this.p.color(8, 11, 16) :
       this.p.color(10, 14, 20)
     );
     p.push();
     p.translate(-Math.round(this.cameraX), -Math.round(this.cameraY));
     this._drawGrid();
+    this._drawSwitches();
     this._drawScanner();
     this._drawOctopus();
     this._drawPlayer();
@@ -1453,6 +1535,19 @@ class GridMazeRunner {
     const isFloor = (r, c) => r >= 0 && r < rows && c >= 0 && c < cols && grid[r][c] !== 'wall';
     const dungeon = this.theme === 'dungeon';
     const foundry = this.theme === 'foundry';
+    const vault = this.theme === 'vault';
+
+    if (vault) {
+      // Plain steel-blue backdrop with a faint panel grid — reads as a bank
+      // vault's server floor, not empty space.
+      p.noStroke();
+      p.fill(9, 13, 19);
+      p.rect(0, 0, cols * this.tile, rows * this.tile);
+      p.stroke(18, 26, 36);
+      p.strokeWeight(1);
+      for (let x = 0; x < cols * this.tile; x += this.tile) p.line(x, 0, x, rows * this.tile);
+      for (let y = 0; y < rows * this.tile; y += this.tile) p.line(0, y, cols * this.tile, y);
+    }
 
     if (foundry) {
       // Plain rust-metal backdrop with faint rivet seams — no brick lines,
@@ -1496,6 +1591,8 @@ class GridMazeRunner {
           p.fill(isGoal ? p.color(32, 58, 48) : p.color(42, 34, 28));
         } else if (foundry) {
           p.fill(isGoal ? p.color(32, 58, 48) : p.color(60, 40, 24));
+        } else if (vault) {
+          p.fill(isGoal ? p.color(32, 58, 48) : p.color(34, 42, 56));
         } else {
           p.fill(isGoal ? p.color(32, 58, 48) : p.color(46, 56, 76));
         }
@@ -1503,7 +1600,7 @@ class GridMazeRunner {
 
         // Perimeter glow: a bright edge everywhere the walkable floor meets
         // the void, so it's unmistakable which tiles you can stand on.
-        p.stroke(dungeon ? p.color(210, 130, 50, 160) : foundry ? p.color(255, 140, 50, 170) : p.color(90, 200, 230, 170));
+        p.stroke(dungeon ? p.color(210, 130, 50, 160) : foundry ? p.color(255, 140, 50, 170) : vault ? p.color(90, 170, 255, 170) : p.color(90, 200, 230, 170));
         p.strokeWeight(2);
         if (!isFloor(r - 1, c)) p.line(x + 2, y + 1, x + this.tile - 2, y + 1);
         if (!isFloor(r + 1, c)) p.line(x + 2, y + this.tile - 1, x + this.tile - 2, y + this.tile - 1);
@@ -1532,6 +1629,11 @@ class GridMazeRunner {
         } else if (foundry) {
           p.noStroke();
           p.fill(20, 13, 8, 160);
+          p.circle(x + this.tile * 0.25, y + this.tile * 0.25, 3);
+          p.circle(x + this.tile * 0.75, y + this.tile * 0.75, 3);
+        } else if (vault) {
+          p.noStroke();
+          p.fill(70, 130, 200, 90);
           p.circle(x + this.tile * 0.25, y + this.tile * 0.25, 3);
           p.circle(x + this.tile * 0.75, y + this.tile * 0.75, 3);
         } else {
@@ -1567,6 +1669,43 @@ class GridMazeRunner {
         }
       }
     }
+  }
+
+  // Vault switches: small wall terminals, dim red until stepped on (see
+  // simulateVault), then lit green for the rest of the run. State comes
+  // straight off the trace's per-step `switchesOn` snapshot — same
+  // simulate-then-replay contract as everything else, this just renders it.
+  _drawSwitches() {
+    const switches = this.level.switches;
+    if (!switches) return;
+    const p = this.p;
+    const entry = this.trace[Math.min(this.stepIndex + 1, this.trace.length - 1)];
+    const states = entry.switchesOn || switches.map(() => false);
+    const t = p.millis() * 0.001;
+    switches.forEach((s, i) => {
+      const on = states[i];
+      const x = s.col * this.tile + this.tile / 2;
+      const y = s.row * this.tile + this.tile / 2;
+      p.push();
+      p.translate(x, y);
+      p.noStroke();
+      p.fill(20, 22, 28);
+      p.rect(-this.tile * 0.25, -this.tile * 0.04, this.tile * 0.5, this.tile * 0.32, 3);
+      if (on) {
+        const pulse = 0.5 + 0.5 * Math.sin(t * 4 + i);
+        p.fill(70, 230, 140, 120 + pulse * 80);
+        p.circle(0, this.tile * 0.12, this.tile * 0.3 + pulse * 3);
+        p.fill(70, 230, 140);
+        p.circle(0, this.tile * 0.12, this.tile * 0.16);
+      } else {
+        const pulse = 0.5 + 0.5 * Math.sin(t * 2 + i);
+        p.fill(210, 60, 60, 60 + pulse * 40);
+        p.circle(0, this.tile * 0.12, this.tile * 0.2);
+        p.fill(160, 40, 40);
+        p.circle(0, this.tile * 0.12, this.tile * 0.1);
+      }
+      p.pop();
+    });
   }
 
   // A small patrol drone: quad rotor arms with blurred props, a blinking

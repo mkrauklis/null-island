@@ -40,9 +40,9 @@ const WORLDS = [
     id: 'world5',
     title: 'The Vault',
     concept: 'Arrays & objects',
-    path: null,
-    built: false,
-    parMoves: null,
+    path: 'levels/world5/index.html',
+    built: true,
+    parMoves: 26,
   },
   {
     id: 'world6',

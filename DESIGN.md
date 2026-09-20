@@ -254,10 +254,38 @@ engine where the stack shape doesn't match, `getCallerLine()` just returns
 anything. `syncCodeHighlight(editor, runner)` is shared by all four worlds'
 render loops — one function, not four copies.
 
-### World 5 — The Vault (top-down maze, harder) — not built
+### World 5 — The Vault — built
 **Teaches:** arrays/objects.
-Multiple switches/terminals manipulated by looping over a list rather than
-hardcoding each one individually.
+A bigger generated maze (`GridMazeRunner`, new `vault` theme — steel-blue,
+panel-grid backdrop) scattered with 4 switch terminals. Stepping onto a
+terminal's tile lights it automatically, same physicality as the goal
+itself; reaching the goal only counts as `'goal'` once every terminal is
+lit, otherwise it's `'goal-incomplete'` (states exactly how many are still
+dark) — same honesty principle as World 3's `'goal-unearned'`.
+
+`switches()` is a read-only query (doesn't consume a tick, same contract as
+`octopusNear()`) returning a snapshot array of `{row, col, on}` objects —
+the array-of-objects hook. Nothing forces the player to actually loop over
+it (same "teaches by fit, not force" choice as every prior world's
+mechanic), but checking four separate booleans by hand is annoying enough
+that the hint and starter comment both model `switches().filter(s =>
+!s.on)`. The `lister` achievement rewards actually doing that: `switches()`
+referenced alongside a loop or array method, not just called once.
+
+`simulateVault` is a fourth engine-level simulate function (`js/engine.js`,
+alongside the side-scroller, scanner/squid grid-maze, and chase grid-maze) —
+consistent with how each world's win-condition semantics has gotten its own
+simulate function rather than overloading a shared one. Switch placement
+uses the same generated-maze "room cell" grid (`generateMaze`) as World 2/3,
+picked with a minimum spacing heuristic so they don't cluster.
+
+**Par is a constructed solution, not a proven minimum**, same tradeoff as
+World 3's `findGreedySolution` and for the same reason: exact TSP over
+"visit N waypoints in whatever order, then reach the goal" has no cheap
+exact search once N gets past a couple of points. `greedyVaultPar`
+(`world5.js`) builds a route via nearest-unvisited-switch-by-BFS-distance
+each step, then to the goal, and reports its length honestly labeled as
+such in both the world-select par line and the in-level hint.
 
 ### World 6 — The Core (boss, everything combined) — not built
 **Teaches:** events/callbacks.

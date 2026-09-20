@@ -145,7 +145,8 @@ header.hero p {
   color: var(--danger);
 }
 
-#status.goal-unearned {
+#status.goal-unearned,
+#status.goal-incomplete {
   color: #f4c542;
 }
 
