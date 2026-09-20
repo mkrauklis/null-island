@@ -10,10 +10,10 @@
 <header class="hero" style="padding:2.5rem 1.5rem 1rem;">
   <h1 style="font-size:2rem;">Enemy Guide</h1>
   <p>Every hazard on the island, in one place — what it looks like, which
-  world it's in, and how to get past it.</p>
+  area it's in, and how to get past it.</p>
 </header>
 <div class="wrap">
-  <p style="text-align:center;"><a href="worlds.html">&larr; back to World Select</a></p>
+  <p style="text-align:center;"><a href="worlds.html">&larr; back to Area Select</a></p>
   <div class="enemy-grid" id="enemy-grid"></div>
 </div>
 
@@ -30,7 +30,7 @@
 const ENEMIES = [
   {
     title: 'Scanner',
-    world: 'World 2 — The Vents (Loops)',
+    world: 'Area 2 — The Vents (Loops)',
     description: 'A patrol drone that steps once every tick you do — including wait(). ' +
       'It walks a fixed back-and-forth path. Time your moves (or a wait()) so you’re never ' +
       'standing where it lands.',
@@ -55,7 +55,7 @@ const ENEMIES = [
   },
   {
     title: 'Octopus',
-    world: 'World 3 — The Dungeon Halls (Conditionals)',
+    world: 'Area 3 — The Dungeon Halls (Conditionals)',
     description: 'Chases you: one greedy step toward wherever you just moved, every other tick ' +
       '(half your speed). octopusNear() tells you if one is within 2 tiles right now — react to ' +
       'it instead of committing to a fixed path.',
@@ -82,7 +82,7 @@ const ENEMIES = [
   },
   {
     title: 'Squid',
-    world: 'World 4 — The Foundry (Functions)',
+    world: 'Area 4 — The Foundry (Functions)',
     description: 'Red Light, Green Light: watches the whole room on a fixed cycle. Grey eye, ' +
       'looking around — safe to move. Red eye, watching — any move at all gets you caught, ' +
       'wherever you are. wait() is always safe.',

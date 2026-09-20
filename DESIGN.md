@@ -28,7 +28,7 @@ write a solution) while still supporting real loops and conditionals, since
 those are evaluated at trace-build time against known level state.
 
 **Resolved:** the "reactive dodging" open question turned out not to need a
-second execution mode. World 3's octopus chases greedily (shortest path
+second execution mode. Area 3's octopus chases greedily (shortest path
 toward the player's cell, recomputed after every move), which sounds "live"
 but is actually a pure function of the player's already-decided move
 sequence — so it's fully computable during the same synchronous trace-build
@@ -37,19 +37,19 @@ real state *as of that point in the simulated trace*, same as any other
 query function would. The only time this stops working is if a future
 world's obstacle depends on something the simulator doesn't control (real
 wall-clock time, true randomness) — not the case for anything built so far.
-World 6's boss will need to be re-examined against this once designed, but
+Area 6's boss will need to be re-examined against this once designed, but
 the model itself no longer looks like the blocker it did.
 
 **Procedural, seeded levels:** every level is generated from
 `Progress.getSeed(worldId)` — a random seed picked once and stuck to a
 player (localStorage), not re-rolled every reload. `js/engine.js` provides
 `mulberry32` (seeded PRNG), `shuffleWithRng`, and `generateMaze` (recursive-
-backtracker perfect maze on a wall/floor tile grid — shared by World 2 and
+backtracker perfect maze on a wall/floor tile grid — shared by Area 2 and
 3). Every generator verifies solvability with the matching BFS solver
 (`computeMinMoves`/`computeMinMovesGrid`/`computeMinMovesGridChase`) before
 accepting a layout, regenerating or falling back if it comes up `Infinity`.
 Because par is no longer a fixed number, it's computed at load time and
-cached via `Progress.setWorldPar` so World Select can show it without
+cached via `Progress.setWorldPar` so Area Select can show it without
 re-running that world's generator.
 
 **Gotcha worth remembering:** a perfect maze (`generateMaze`) has exactly
@@ -81,7 +81,7 @@ token an underline in CodeMirror, cleared on the next edit.
 
 **Progress (`js/progress.js`):** localStorage-backed, no accounts. Per world,
 tracks `cleared` and `bestMoves` (the lowest move count that has ever
-cleared it). A world is unlocked if it's World 1, or the world before it is
+cleared it). A world is unlocked if it's Area 1, or the world before it is
 cleared — `js/worlds-registry.js` holds the ordered list every page checks
 this against, plus each built world's `parMoves`.
 
@@ -90,7 +90,7 @@ clear a level, computed by BFS over the level's own simulation rules
 (`computeMinMoves` for side-scrollers, `computeMinMovesGrid` — a
 time-expanded BFS keyed on `(row, col, tick mod scanner-period)` — for grid
 mazes with a patrolling enemy). It's computed, never hand-guessed: a level's
-"obvious" solution is often not the cheapest one (e.g. World 1's jump()
+"obvious" solution is often not the cheapest one (e.g. Area 1's jump()
 isn't restricted to only work over an actual gap, so the true par turned out
 to be "just jump the whole way," not the walk/jump/walk solution the hint
 text suggests). A clear earns a star when `bestMoves <= parMoves`.
@@ -109,7 +109,7 @@ once you've proven you know the syntax, not to gate it.
 
 **Next-world CTA:** `renderNextWorldLink` (engine.js) shows a button on a
 win pointing at the next built world in `worlds-registry.js`, or back to
-World Select if the next one isn't built yet. Assumes the
+Area Select if the next one isn't built yet. Assumes the
 `levels/<id>/index.html` folder-naming convention.
 
 **Achievements (`js/achievements.js`):** a flat catalog of badges, stored
@@ -121,15 +121,15 @@ winning trace right there), checked once per win: `jumper`/`looper`/
 `compass` checks the trace used all four directions, `perfectionist` checks
 the star, `escapee` (checked cross-world, from `worlds.html`) fires once
 every *built* world is cleared. Several of these are deliberately not
-achievable by the intended/optimal solution (e.g. World 2 never needs
+achievable by the intended/optimal solution (e.g. Area 2 never needs
 `moveLeft`/`moveDown` to clear it) — they're side quests for players who
 go looking, not a second scoring track. `worlds.html` renders the full
 catalog, showing `???` for anything not yet earned rather than spelling
 out what it takes.
 
-## World progression
+## Area progression
 
-### World 1 — The Wreck (side-scroller, tutorial) — built
+### Area 1 — The Wreck (side-scroller, tutorial) — built
 **Teaches:** sequential commands (`moveRight()`, `jump()`).
 Low stakes, no enemies. Getting oriented: code = control. Two gaps to clear
 by jumping prove that order and precision matter. Real gravity-driven jump
@@ -138,7 +138,7 @@ background — see the commit history for the physics/graphics pass. Course
 length and gap placement are now seeded-random per player (gaps spaced >=3
 columns apart by construction, so a jump can always clear exactly one).
 
-### World 2 — The Vents (top-down maze) — built
+### Area 2 — The Vents (top-down maze) — built
 **Teaches:** loops.
 A real generated maze now (`generateMaze`, seeded per player), not just a
 straight shaft — long enough that writing out every individual move by hand
@@ -165,7 +165,7 @@ General principle for future worlds: a puzzle being *solvable* isn't the
 same as it being *debuggable* — always show the player enough state to
 know why an attempt failed, not just that it did.
 
-### World 3 — The Dungeon Halls — MVP built, full vision not yet
+### Area 3 — The Dungeon Halls — MVP built, full vision not yet
 **Teaches:** conditionals.
 What's actually built: a single generated maze (`simulateGridMazeChase`)
 with a small, cartoonish octopus that greedily chases the player — one step
@@ -185,13 +185,13 @@ game's first real scare. The current MVP proves the chase mechanic works;
 the key-hunt/multi-area structure is the next pass on this world, not a
 replacement for it.
 
-### World 4 — The Foundry — built
+### Area 4 — The Foundry — built
 **Teaches:** functions.
 A catwalk (`GridMazeRunner`, new `foundry` theme — rust-metal palette, no
 darkness pass) with three gaps in the floor plating, each needing the exact
 same four-move detour (up, over, over, down). Nothing enforces writing an
 actual `function` — same "teaches by fit, not force" choice already made for
-World 2's loops — but retyping the same four lines three times is annoying
+Area 2's loops — but retyping the same four lines three times is annoying
 enough that the hint text and a starter-code comment both point at defining
 `passGap()` once and calling it three times instead. The `reuser` achievement
 (`js/achievements.js`) rewards it directly: a declared function called at
@@ -200,15 +200,15 @@ least twice beyond its own declaration.
 No new engine mechanic was needed — `new Function(...)` already runs the
 player's code as a real JS function body, so nested `function` declarations
 and calls just work with the existing `simulateGridMaze`/`computeMinMovesGrid`
-from World 2. The layout itself isn't a generated maze (`generateMaze`) like
-World 2/3 — it's constructed directly (a 2-row grid: a floor row with the
+from Area 2. The layout itself isn't a generated maze (`generateMaze`) like
+Area 2/3 — it's constructed directly (a 2-row grid: a floor row with the
 three gaps, a "detour lane" row that's only floor immediately around each
 gap), so it's connected by construction and doesn't need a BFS solvability
 check, only a par count. One side effect worth knowing: closely-spaced gaps'
 detour-lane clusters can merge into one longer upper corridor, letting the
 BFS-computed par undercut the "three separate identical detours" solution —
 not a bug, just means the naive intended solution isn't always the optimal
-one, same as it isn't in World 2 or 3.
+one, same as it isn't in Area 2 or 3.
 
 **The squid — Red Light, Green Light.** A fixed overseer, drawn in the HUD
 above the catwalk (not part of the level grid — see `_drawSquid`), with one
@@ -340,14 +340,14 @@ of whether the player watched it happen instantly or one click at a time.
 Verified end-to-end: stepped a real par-matching solution through to a win
 and confirmed `Progress.recordClear` fired with the right move count.
 
-### World 5 — The Vault — built
+### Area 5 — The Vault — built
 **Teaches:** arrays/objects.
 A bigger generated maze (`GridMazeRunner`, new `vault` theme — steel-blue,
 panel-grid backdrop) scattered with 4 switch terminals. Stepping onto a
 terminal's tile lights it automatically, same physicality as the goal
 itself; reaching the goal only counts as `'goal'` once every terminal is
 lit, otherwise it's `'goal-incomplete'` (states exactly how many are still
-dark) — same honesty principle as World 3's `'goal-unearned'`.
+dark) — same honesty principle as Area 3's `'goal-unearned'`.
 
 `switches()` is a read-only query (doesn't consume a tick, same contract as
 `octopusNear()`) returning a snapshot array of `{row, col, on}` objects —
@@ -362,18 +362,18 @@ referenced alongside a loop or array method, not just called once.
 alongside the side-scroller, scanner/squid grid-maze, and chase grid-maze) —
 consistent with how each world's win-condition semantics has gotten its own
 simulate function rather than overloading a shared one. Switch placement
-uses the same generated-maze "room cell" grid (`generateMaze`) as World 2/3,
+uses the same generated-maze "room cell" grid (`generateMaze`) as Area 2/3,
 picked with a minimum spacing heuristic so they don't cluster.
 
 **Par is a constructed solution, not a proven minimum**, same tradeoff as
-World 3's `findGreedySolution` and for the same reason: exact TSP over
+Area 3's `findGreedySolution` and for the same reason: exact TSP over
 "visit N waypoints in whatever order, then reach the goal" has no cheap
 exact search once N gets past a couple of points. `greedyVaultPar`
 (`world5.js`) builds a route via nearest-unvisited-switch-by-BFS-distance
 each step, then to the goal, and reports its length honestly labeled as
 such in both the world-select par line and the in-level hint.
 
-### World 6 — The Core (boss, everything combined) — not built
+### Area 6 — The Core (boss, everything combined) — not built
 **Teaches:** events/callbacks.
 The source of the island's corruption: a **mutated octopus**, five tentacles,
 each with a bomb strapped to it. The player must register handlers/trigger
@@ -412,17 +412,17 @@ a single draw pass.
 
 ## Wins, rank, and the re-lock loop
 
-A **win** means every world (all 6 — currently a no-op until World 6 ships,
+A **win** means every world (all 6 — currently a no-op until Area 6 ships,
 since it can never be true with only 3 built) is cleared at once.
 `Progress.checkForWin(WORLDS)`, called after every clear from each world's
 own script, checks that; when it's true it increments a stored win count
 and wipes `PROGRESS_KEY` entirely — every world's `cleared`/`bestMoves`/
-`parMoves` resets, re-locking the whole game back to World 1. Seeds,
+`parMoves` resets, re-locking the whole game back to Area 1. Seeds,
 achievements, unlocked command-palette snippets, and character
 customization are untouched — only the lock/clear state resets, so a
 completed run becomes a fresh one rather than a wiped save. This is
 deliberately a *different*, softer reset than the "Reset progress" button
-on World Select, which still wipes everything including the win count.
+on Area Select, which still wipes everything including the win count.
 
 `js/ranks.js` maps win count directly to a title — Beginner (0) → Learner
 (3) → Technician (5) → Coded (7) → Hacked (10) → Webbed (15) → Networked
@@ -431,7 +431,7 @@ it's shown rather than stored separately, so it can't drift out of sync.
 Each rank is a multiple of full playthroughs, not incremental score — the
 tiers are deliberately far apart since a "win" is the whole game, not a
 single level. Each rank also carries a `color` used for both the badge text
-and its border on World Select.
+and its border on Area Select.
 
 The top three ranks (Webbed, Networked, Interwebbed) additionally get a
 small particle effect around the badge — rising, color-matched sparks on a
@@ -443,14 +443,14 @@ is cheap to call even when nothing changes — it only tears down and
 restarts the animation when the rank *title* actually changes, and no-ops
 back to hidden below Webbed.
 
-World Select also shows a full ranks board (`renderRankBoard`, below the
+Area Select also shows a full ranks board (`renderRankBoard`, below the
 world grid) — every tier from `RANKS`, unlocked ones in their real color
 with a border, locked ones dimmed via opacity, and the player's current
 tier labeled "You are here." Unlike the achievement grid, locked rank
 titles aren't hidden behind "???" — a rank name and its win requirement
 aren't a mystery to preserve, just a target not yet reached.
 
-## World 3 lighting
+## Area 3 lighting
 
 Dungeon-theme grid mazes render mostly dark, lit only by torches (placed by
 `_torchCells()`, the same deterministic rule `_drawGrid` already used to draw
@@ -460,7 +460,7 @@ originally, added because the dungeon needed the torches to actually mean
 something. Implemented as an offscreen buffer filled opaque near-black, then
 punched through with `destination-out` radial gradients at each light
 source (`GridMazeRunner._drawDarkness`) — soft falloff instead of a hard
-circle. World 2 (theme `'vents'`) is unaffected; the darkness pass no-ops
+circle. Area 2 (theme `'vents'`) is unaffected; the darkness pass no-ops
 for any theme but `'dungeon'`.
 
 ## Save slots (multiple games)
@@ -504,7 +504,7 @@ no custom modal, consistent with how "Reset progress" already works.
 
 ## Enemy guide
 
-`enemies.html`, linked from World Select. One card per hazard (Scanner,
+`enemies.html`, linked from Area Select. One card per hazard (Scanner,
 Octopus, Squid — the three built so far), each with a small looping demo
 animation. Deliberately reuses the real rendering, not a redrawn copy: each
 card builds a tiny fake level (`{grid, start, goal, scanner/octopi/squid}`)

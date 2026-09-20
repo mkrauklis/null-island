@@ -68,7 +68,7 @@ function renderNextWorldLink(worldId) {
     btn.textContent = 'Next: ' + next.title + ' →';
   } else {
     btn.href = '../../worlds.html';
-    btn.textContent = next ? 'More worlds coming soon →' : 'Back to World Select →';
+    btn.textContent = next ? 'More areas coming soon →' : 'Back to Area Select →';
   }
   btn.classList.add('visible');
 }
@@ -97,7 +97,7 @@ function checkGameWinAndAnnounce() {
   if (result.won) {
     const el = document.getElementById('achievement-notice');
     if (el) {
-      const winMsg = `\u{1F3C6} You beat Null Island! Win #${result.wins} — every world is locked again for a fresh run.`;
+      const winMsg = `\u{1F3C6} You beat Null Island! Win #${result.wins} — every area is locked again for a fresh run.`;
       el.innerHTML = el.innerHTML ? el.innerHTML + '<br>' + winMsg : winMsg;
     }
   }

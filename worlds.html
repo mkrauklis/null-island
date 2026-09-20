@@ -2,17 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>World Select — Null Island</title>
+<title>Area Select — Null Island</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <header class="hero" style="padding:2.5rem 1.5rem 1rem;">
   <h1 style="font-size:2rem;">Null Island</h1>
-  <p>Pick a world. Locked worlds open once you've cleared the one before them.
+  <p>Pick an area. Locked areas open once you've cleared the one before them.
   <strong>Par</strong> is the fewest moves anyone's found to clear a level —
   match it and you earn a <span class="star">&#9733;</span>. Clear every
-  world for a <strong>win</strong> — then all six lock again for a fresh run.</p>
+  area for a <strong>win</strong> — then all six lock again for a fresh run.</p>
   <div class="rank-wrap" id="rank-wrap">
     <canvas id="rank-particles"></canvas>
     <div id="rank-badge" class="rank-badge"></div>
@@ -78,7 +78,7 @@ function renderGrid() {
     const status = document.createElement('div');
     status.className = 'status-line';
     if (!unlocked) {
-      status.textContent = 'Locked — clear the previous world first.';
+      status.textContent = 'Locked — clear the previous area first.';
     } else if (!world.built) {
       status.textContent = 'Unlocked — coming soon.';
     } else if (!state.cleared) {
