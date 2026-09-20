@@ -206,6 +206,19 @@ the player is reacting to an event (`onTentacleExposed(id, () => detonate(id))`)
 rather than running a fixed script. All five down opens the hall to the
 finish, where a **helicopter is waiting outside** — the ending.
 
+## The player character
+
+The player is a capuchin, customizable (color + one cosmetic: party hat, top
+hat, or angel wings) from a panel on the splash screen (`index.html`).
+`Progress.getCharacter()`/`setCharacter()` store the choice in localStorage,
+deliberately outside `resetAll()` — it's a cosmetic preference, not
+progress, so "reset progress" doesn't silently undo it.
+
+Drawn by one shared function, `drawCapuchin(p, tile, opts)` (engine.js),
+called from three places: the splash-screen preview, `SideScrollerRunner`,
+and `GridMazeRunner`. Pick a color once and it's the same monkey everywhere
+in the game — there's no per-world character art to keep in sync.
+
 ## Repo conventions
 
 - `index.html` — splash screen (title, premise, one link into `worlds.html`).

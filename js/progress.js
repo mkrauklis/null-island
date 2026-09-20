@@ -8,6 +8,7 @@ const PROGRESS_KEY = 'null-island:progress:v1';
 const SNIPPETS_KEY = 'null-island:snippets:v1';
 const ACHIEVEMENTS_KEY = 'null-island:achievements:v1';
 const SEEDS_KEY = 'null-island:seeds:v1';
+const CHARACTER_KEY = 'null-island:character:v1';
 
 const Progress = {
   _load(key) {
@@ -98,6 +99,14 @@ const Progress = {
     earned.push(id);
     this._save(ACHIEVEMENTS_KEY, earned);
     return { list: earned, isNew: true };
+  },
+
+  getCharacter() {
+    return this._load(CHARACTER_KEY) || { color: 'orange', accessory: 'none' };
+  },
+
+  setCharacter(character) {
+    this._save(CHARACTER_KEY, character);
   },
 
   resetAll() {

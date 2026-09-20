@@ -194,6 +194,109 @@ function hash01(n) {
   return x - Math.floor(x);
 }
 
+// The player character: a capuchin, customizable from the splash screen
+// (Progress.getCharacter) and drawn identically everywhere it appears —
+// the splash preview and both runners all call this one function, so a
+// choice made once shows up consistently in every world.
+const CHARACTER_COLORS = {
+  red: [214, 69, 69],
+  orange: [224, 142, 62],
+  yellow: [224, 197, 68],
+  green: [96, 189, 110],
+  blue: [78, 146, 219],
+  purple: [161, 96, 204],
+  black: [46, 44, 50],
+  white: [232, 232, 232],
+};
+
+function drawCapuchin(p, tile, opts = {}) {
+  const character = (typeof Progress !== 'undefined' && Progress.getCharacter) ? Progress.getCharacter() : { color: 'orange', accessory: 'none' };
+  const color = opts.color || character.color || 'orange';
+  const accessory = opts.accessory !== undefined ? opts.accessory : character.accessory;
+  const [fr, fg, fb] = CHARACTER_COLORS[color] || CHARACTER_COLORS.orange;
+  const s = tile / 48;
+  const legSwing = opts.legSwing || 0;
+
+  // tail
+  p.noFill();
+  p.stroke(fr, fg, fb);
+  p.strokeWeight(2.5 * s);
+  p.beginShape();
+  p.curveVertex(6 * s, 8 * s);
+  p.curveVertex(6 * s, 8 * s);
+  p.curveVertex(13 * s, 3 * s);
+  p.curveVertex(13 * s, -5 * s);
+  p.curveVertex(8 * s, -9 * s);
+  p.curveVertex(8 * s, -9 * s);
+  p.endShape();
+
+  // legs
+  p.stroke(fr * 0.65, fg * 0.65, fb * 0.65);
+  p.strokeWeight(3 * s);
+  p.line(-4 * s, 10 * s, -4 * s + legSwing * 0.4, 18 * s);
+  p.line(4 * s, 10 * s, 4 * s - legSwing * 0.4, 18 * s);
+
+  // arms
+  p.stroke(fr, fg, fb);
+  p.strokeWeight(3 * s);
+  p.line(-8 * s, 2 * s, -11 * s, 9 * s);
+  p.line(8 * s, 2 * s, 11 * s, 9 * s);
+
+  // body
+  p.noStroke();
+  p.fill(fr, fg, fb);
+  p.ellipse(0, 4 * s, 15 * s, 17 * s);
+
+  // head + ears
+  p.circle(-9 * s, -10 * s, 6 * s);
+  p.circle(9 * s, -10 * s, 6 * s);
+  p.circle(0, -10 * s, 17 * s);
+
+  // face patch (capuchins have a pale face/chest regardless of fur color)
+  p.fill(240, 226, 196);
+  p.ellipse(0, -7 * s, 11 * s, 10 * s);
+
+  // eyes + muzzle
+  p.fill(35, 24, 18);
+  p.circle(-3 * s, -9 * s, 2.2 * s);
+  p.circle(3 * s, -9 * s, 2.2 * s);
+  p.noFill();
+  p.stroke(35, 24, 18);
+  p.strokeWeight(1.2 * s);
+  p.arc(0, -4 * s, 4 * s, 3 * s, 0, Math.PI);
+
+  drawAccessory(p, s, accessory);
+}
+
+function drawAccessory(p, s, accessory) {
+  p.noStroke();
+  if (accessory === 'partyHat') {
+    p.fill(230, 70, 130);
+    p.triangle(-6 * s, -17 * s, 6 * s, -17 * s, 0, -31 * s);
+    p.fill(120, 200, 230);
+    p.circle(-3 * s, -20 * s, 2.5 * s);
+    p.circle(2 * s, -24 * s, 2.5 * s);
+    p.fill(255, 220, 80);
+    p.circle(0, -31 * s, 4 * s);
+  } else if (accessory === 'topHat') {
+    p.fill(22, 22, 26);
+    p.rect(-7 * s, -27 * s, 14 * s, 11 * s, 1);
+    p.rect(-10 * s, -17 * s, 20 * s, 3 * s, 1);
+    p.fill(180, 40, 60);
+    p.rect(-7 * s, -19 * s, 14 * s, 2.5 * s);
+  } else if (accessory === 'wings') {
+    p.fill(255, 255, 255, 235);
+    [-1, 1].forEach((side) => {
+      p.push();
+      p.translate(side * 7 * s, -1 * s);
+      p.rotate(side * -0.35);
+      p.ellipse(0, 0, 7 * s, 15 * s);
+      p.ellipse(0, 4 * s, 5 * s, 9 * s);
+      p.pop();
+    });
+  }
+}
+
 // Plays a trace back on a p5 canvas, one step at a time, with real gravity
 // on the jump arc and the death fall, plus a scrolling camera so bigger
 // future levels don't need a wider canvas.
@@ -433,20 +536,7 @@ class SideScrollerRunner {
     if (pos.falling) p.rotate(Math.min(this.fallElapsed * 2, 1.4));
 
     const legSwing = pos.jumping || pos.falling ? 0 : Math.sin(pos.walkT * Math.PI * 2) * 7;
-    p.stroke(210, 220, 235);
-    p.strokeWeight(3);
-    p.line(-4, 10, -4 + legSwing * 0.4, 18);
-    p.line(4, 10, 4 - legSwing * 0.4, 18);
-
-    p.noStroke();
-    p.fill(224, 168, 64);
-    p.rect(-9, -12, 18, 22, 5);
-
-    p.fill(30, 34, 44);
-    p.rect(-7, -8, 14, 8, 3);
-    const glow = 0.6 + 0.4 * Math.sin(p.millis() * 0.006);
-    p.fill(90, 220, 255, 180 + glow * 60);
-    p.rect(-5, -6.5, 10, 4, 2);
+    drawCapuchin(p, this.tile, { legSwing });
 
     p.pop();
   }
@@ -1161,12 +1251,9 @@ class GridMazeRunner {
     p.noStroke();
     p.fill(0, 0, 0, 90);
     p.ellipse(pos.x, pos.y + this.tile * 0.28, this.tile * 0.4, this.tile * 0.14);
-    p.fill(224, 168, 64);
-    p.rect(pos.x - 9, pos.y - 12, 18, 22, 5);
-    p.fill(30, 34, 44);
-    p.rect(pos.x - 7, pos.y - 8, 14, 8, 3);
-    const glow = 0.6 + 0.4 * Math.sin(p.millis() * 0.006);
-    p.fill(90, 220, 255, 180 + glow * 60);
-    p.rect(pos.x - 5, pos.y - 6.5, 10, 4, 2);
+    p.push();
+    p.translate(pos.x, pos.y);
+    drawCapuchin(p, this.tile, {});
+    p.pop();
   }
 }
