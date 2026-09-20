@@ -364,6 +364,8 @@ function drawCharacter(p, tile, opts = {}) {
   else if (skin === 'catfish') drawCatfishBody(p, s, fr, fg, fb, legSwing);
   else if (skin === 'koi') drawKoiBody(p, s, fr, fg, fb, legSwing);
   else if (skin === 'shark') drawSharkBody(p, s, fr, fg, fb, legSwing);
+  else if (skin === 'barracuda') drawBarracudaBody(p, s, fr, fg, fb, legSwing);
+  else if (skin === 'chimpanzee') drawChimpanzeeBody(p, s, fr, fg, fb, legSwing);
   else drawCapuchinBody(p, s, fr, fg, fb, legSwing);
 
   drawAccessory(p, s, accessory);
@@ -728,6 +730,124 @@ function drawSharkBody(p, s, fr, fg, fb, legSwing) {
   p.circle(-3 * s, -14 * s, 1.6 * s);
   p.circle(3 * s, -14 * s, 1.6 * s);
   p.pop();
+}
+
+function drawBarracudaBody(p, s, fr, fg, fb, legSwing) {
+  const wobble = legSwing * 0.015;
+  p.push();
+  p.rotate(wobble);
+
+  // small fins set far back + a forked tail instead of legs
+  p.noStroke();
+  p.fill(fr * 0.7, fg * 0.7, fb * 0.7);
+  p.triangle(-4 * s, 10 * s, -10 * s, 14 * s, -3 * s, 16 * s);
+  p.triangle(4 * s, 10 * s, 10 * s, 14 * s, 3 * s, 16 * s);
+  p.triangle(-2 * s, 20 * s, -8 * s, 30 * s, 0, 23 * s);
+  p.triangle(2 * s, 20 * s, 8 * s, 30 * s, 0, 23 * s);
+
+  // very long, slender torpedo body
+  p.fill(fr, fg, fb);
+  p.beginShape();
+  p.vertex(0, -22 * s);
+  p.bezierVertex(5 * s, -15 * s, 6 * s, 6 * s, 3 * s, 18 * s);
+  p.vertex(-3 * s, 18 * s);
+  p.bezierVertex(-6 * s, 6 * s, -5 * s, -15 * s, 0, -22 * s);
+  p.endShape(p.CLOSE);
+
+  // silvery streaked flank
+  p.stroke(fr * 1.4, fg * 1.4, fb * 1.4, 130);
+  p.strokeWeight(0.8 * s);
+  for (let i = 0; i < 4; i++) {
+    const y = -14 * s + i * 8 * s;
+    p.line(-4 * s, y, 4 * s, y + 2 * s);
+  }
+  p.noStroke();
+
+  // low dorsal fin, set well back toward the tail
+  p.fill(fr * 0.8, fg * 0.8, fb * 0.8);
+  p.triangle(-1 * s, 4 * s, 1 * s, -3 * s, 3 * s, 5 * s);
+
+  // long, pointed, underslung jaw — the barracuda's signature profile
+  p.fill(fr * 0.95, fg * 0.95, fb * 0.95);
+  p.beginShape();
+  p.vertex(-3 * s, -18 * s);
+  p.vertex(0, -27 * s);
+  p.vertex(3 * s, -18 * s);
+  p.endShape(p.CLOSE);
+
+  // visible sharp teeth along the jaw line
+  p.fill(250, 250, 245);
+  for (let i = 0; i < 3; i++) {
+    const t = i / 2;
+    const x = lerp(-2 * s, 2 * s, t);
+    p.triangle(x - 0.8 * s, -19 * s, x + 0.8 * s, -19 * s, x, -22 * s);
+  }
+
+  // small eyes
+  p.noStroke();
+  p.fill(20, 15, 12);
+  p.circle(-2.5 * s, -18 * s, 1.6 * s);
+  p.circle(2.5 * s, -18 * s, 1.6 * s);
+  p.pop();
+}
+
+function drawChimpanzeeBody(p, s, fr, fg, fb, legSwing) {
+  // legs — no tail, unlike the monkey skins (chimps are apes)
+  p.stroke(fr * 0.6, fg * 0.6, fb * 0.6);
+  p.strokeWeight(4 * s);
+  p.line(-4 * s, 9 * s, -4 * s + legSwing * 0.35, 17 * s);
+  p.line(4 * s, 9 * s, 4 * s - legSwing * 0.35, 17 * s);
+
+  // long arms
+  p.stroke(fr, fg, fb);
+  p.strokeWeight(4 * s);
+  p.line(-9 * s, 0, -12 * s, 12 * s);
+  p.line(9 * s, 0, 12 * s, 12 * s);
+
+  // dark hands and feet
+  p.noStroke();
+  p.fill(35, 28, 26);
+  p.circle(-12 * s, 12 * s, 3 * s);
+  p.circle(12 * s, 12 * s, 3 * s);
+  p.circle(-4 * s + legSwing * 0.35, 17 * s, 3 * s);
+  p.circle(4 * s - legSwing * 0.35, 17 * s, 3 * s);
+
+  // body
+  p.fill(fr, fg, fb);
+  p.ellipse(0, 3 * s, 17 * s, 18 * s);
+
+  // large ears, sticking out to the sides
+  p.fill(fr * 0.85, fg * 0.85, fb * 0.85);
+  p.ellipse(-11 * s, -8 * s, 6 * s, 7 * s);
+  p.ellipse(11 * s, -8 * s, 6 * s, 7 * s);
+  p.fill(50, 40, 38);
+  p.ellipse(-11 * s, -8 * s, 3 * s, 4 * s);
+  p.ellipse(11 * s, -8 * s, 3 * s, 4 * s);
+
+  // head
+  p.fill(fr, fg, fb);
+  p.circle(0, -10 * s, 16 * s);
+
+  // bare black face with a brow ridge — chimps have no fur on the face,
+  // unlike the pale face patches on the other monkey skins
+  p.fill(45, 38, 36);
+  p.ellipse(0, -8 * s, 12 * s, 11 * s);
+  p.fill(fr * 0.9, fg * 0.9, fb * 0.9);
+  p.rect(-6 * s, -14 * s, 12 * s, 2.5 * s, 2);
+
+  // eyes
+  p.fill(230, 225, 210);
+  p.circle(-3.5 * s, -9 * s, 2.2 * s);
+  p.circle(3.5 * s, -9 * s, 2.2 * s);
+  p.fill(20, 15, 12);
+  p.circle(-3.5 * s, -9 * s, 1 * s);
+  p.circle(3.5 * s, -9 * s, 1 * s);
+
+  // muzzle / mouth
+  p.noFill();
+  p.stroke(20, 15, 12);
+  p.strokeWeight(1 * s);
+  p.arc(0, -3 * s, 5 * s, 3 * s, 0, Math.PI);
 }
 
 function drawProboscisBody(p, s, fr, fg, fb, legSwing) {

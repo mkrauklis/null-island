@@ -387,7 +387,8 @@ finish, where a **helicopter is waiting outside** — the ending.
 
 Customizable from a panel on the splash screen (`index.html`): species
 ("skin" — capuchin, gorilla, manatee, proboscis monkey, spider monkey,
-narwhal, catfish, koi fish, or shark), a flat fur color, and one cosmetic. Both colors and cosmetics can be locked
+narwhal, catfish, koi fish, shark, barracuda, or chimpanzee), a flat fur
+color, and one cosmetic. Both colors and cosmetics can be locked
 behind a `requiresWorld` (same shape for both — `COLORS`/`ACCESSORIES` in
 `index.html` — checked via `Progress.getWorld(<id>).cleared` directly, one
 source of truth, no separate unlock flag) — a color texture (not just a
