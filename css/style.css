@@ -256,14 +256,31 @@ header.hero p {
   color: var(--accent);
 }
 
-.rank-badge {
+.rank-wrap {
+  position: relative;
+  display: inline-block;
   margin-top: 1rem;
+}
+
+.rank-badge {
+  margin-top: 0;
+  position: relative;
+  z-index: 1;
   display: inline-block;
   padding: 0.4rem 1rem;
   border: 1px solid var(--accent);
   border-radius: 20px;
   color: var(--ink);
   font-size: 0.9rem;
+}
+
+#rank-particles {
+  display: none;
+  position: absolute;
+  top: -24px;
+  left: -24px;
+  z-index: 0;
+  pointer-events: none;
 }
 
 /* World select / settings */

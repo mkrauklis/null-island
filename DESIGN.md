@@ -243,11 +243,23 @@ deliberately a *different*, softer reset than the "Reset progress" button
 on World Select, which still wipes everything including the win count.
 
 `js/ranks.js` maps win count directly to a title — Beginner (0) → Learner
-(3) → Technician (5) → Coded (7) → Hacked (10) → Webbed (15) — recomputed
-from `Progress.getWins()` every time it's shown rather than stored
-separately, so it can't drift out of sync. Each rank is a multiple of full
-playthroughs, not incremental score — the tiers are deliberately far apart
-since a "win" is the whole game, not a single level.
+(3) → Technician (5) → Coded (7) → Hacked (10) → Webbed (15) → Networked
+(25) → Interwebbed (50) — recomputed from `Progress.getWins()` every time
+it's shown rather than stored separately, so it can't drift out of sync.
+Each rank is a multiple of full playthroughs, not incremental score — the
+tiers are deliberately far apart since a "win" is the whole game, not a
+single level. Each rank also carries a `color` used for both the badge text
+and its border on World Select.
+
+The top three ranks (Webbed, Networked, Interwebbed) additionally get a
+small particle effect around the badge — rising, color-matched sparks on a
+`<canvas>` overlay (`js/rank-particles.js`), pure vanilla canvas rather than
+p5 since `worlds.html` doesn't otherwise load it and this is a live
+decorative loop, not a simulated/replayed trace like everything else in the
+engine. `updateRankParticles(rank)` runs every time the badge re-renders and
+is cheap to call even when nothing changes — it only tears down and
+restarts the animation when the rank *title* actually changes, and no-ops
+back to hidden below Webbed.
 
 ## World 3 lighting
 
@@ -278,6 +290,8 @@ for any theme but `'dungeon'`.
   that world's real (seeded) layout.
 - `js/achievements.js` — the badge catalog, plus the one cross-world check
   (`escapee`). Per-world detection lives in each world's own script.
+- `js/ranks.js` — win-count-to-title/color mapping (`RANKS`, `computeRank`).
+- `js/rank-particles.js` — the canvas spark effect for the top three ranks.
 - `css/style.css` — shared theme.
 - No build step. Dependencies (all CDN): p5.js, CodeMirror (theme:
   `dracula`), and Acorn (syntax-error line/column detection only).

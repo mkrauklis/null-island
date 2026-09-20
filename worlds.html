@@ -13,7 +13,10 @@
   <strong>Par</strong> is the fewest moves anyone's found to clear a level —
   match it and you earn a <span class="star">&#9733;</span>. Clear every
   world for a <strong>win</strong> — then all six lock again for a fresh run.</p>
-  <div id="rank-badge" class="rank-badge"></div>
+  <div class="rank-wrap" id="rank-wrap">
+    <canvas id="rank-particles"></canvas>
+    <div id="rank-badge" class="rank-badge"></div>
+  </div>
 </header>
 <div class="wrap">
   <p style="text-align:center;"><a href="index.html">&larr; back to title</a></p>
@@ -29,6 +32,7 @@
 <script src="js/worlds-registry.js"></script>
 <script src="js/achievements.js"></script>
 <script src="js/ranks.js"></script>
+<script src="js/rank-particles.js"></script>
 <script src="js/progress.js"></script>
 <script>
 function renderRank() {
@@ -39,6 +43,7 @@ function renderRank() {
   el.style.borderColor = `rgb(${r},${g},${b})`;
   el.innerHTML = `Rank: <strong style="color:rgb(${r},${g},${b})">${rank.title}</strong> (${rank.wins} ${winWord})` +
     (rank.next ? ` — ${rank.next.winsAway} more to ${rank.next.title}` : ' — max rank');
+  updateRankParticles(rank);
 }
 
 function renderGrid() {
