@@ -645,17 +645,33 @@ function chaseStep(grid, from, to) {
 }
 
 // Same simulate-then-replay contract as simulateGridMaze, but the enemy
-// isn't on a fixed patrol — it takes one greedy step toward the player's
+// aren't on a fixed patrol — each takes one greedy step toward the player's
 // new position after every player action. Still fully deterministic (and
 // so still resolvable at simulate time, no live execution needed) because
-// it only ever reacts to moves the player has already committed to in
+// they only ever react to moves the player has already committed to in
 // their code, never to real-time state the simulator doesn't have.
+//
+// Winning also requires the code to have called octopusNear() at least
+// once. The engine can't make the level truly *impossible* to beat blind —
+// everything here is deterministic, so a hardcoded sequence that happens to
+// replicate a working path would behave identically to a reactive one, and
+// there's no way to tell them apart from outside. Refusing to count a goal
+// reached without ever checking octopusNear() is an enforced rule, not a
+// physical impossibility — same mechanism as achievement detection.
 function simulateGridMazeChase(levelConfig, userCode) {
-  const { grid, start, goal, octopusStart } = levelConfig;
+  const { grid, start, goal, octopi } = levelConfig;
   const rows = grid.length;
   const cols = grid[0].length;
-  const state = { row: start.row, col: start.col, octo: { ...octopusStart }, alive: true, won: false };
-  const trace = [{ row: state.row, col: state.col, octoRow: state.octo.row, octoCol: state.octo.col, event: 'start', tick: 0 }];
+  const state = {
+    row: start.row,
+    col: start.col,
+    octopi: octopi.map((o) => ({ ...o })),
+    alive: true,
+    won: false,
+    finished: false,
+    usedOctopusNear: false,
+  };
+  const trace = [{ row: state.row, col: state.col, octoPositions: octopi.map((o) => ({ ...o })), event: 'start', tick: 0 }];
   let error = null;
   let steps = 0;
 
@@ -669,15 +685,18 @@ function simulateGridMazeChase(levelConfig, userCode) {
     }
   }
   function pushTrace(event, action) {
-    trace.push({ row: state.row, col: state.col, octoRow: state.octo.row, octoCol: state.octo.col, event, action, tick: trace.length });
+    trace.push({ row: state.row, col: state.col, octoPositions: state.octopi.map((o) => ({ ...o })), event, action, tick: trace.length });
+  }
+  function onOctopus(r, c) {
+    return state.octopi.some((o) => o.row === r && o.col === c);
   }
 
   function step(newRow, newCol, action) {
     guard();
-    if (!state.alive || state.won) return;
+    if (state.finished) return;
     const tick = trace.length;
     if (!isFloor(newRow, newCol)) {
-      state.alive = false;
+      state.finished = true;
       state.row = newRow;
       state.col = newCol;
       pushTrace('blocked', action);
@@ -686,8 +705,8 @@ function simulateGridMazeChase(levelConfig, userCode) {
     state.row = newRow;
     state.col = newCol;
 
-    if (state.row === state.octo.row && state.col === state.octo.col) {
-      state.alive = false;
+    if (onOctopus(state.row, state.col)) {
+      state.finished = true;
       pushTrace('caught', action);
       return;
     }
@@ -699,16 +718,26 @@ function simulateGridMazeChase(levelConfig, userCode) {
     // a direct path while still punishing dawdling near it.
     const atGoal = state.row === goal.row && state.col === goal.col;
     if (!atGoal && tick % 2 === 0) {
-      state.octo = chaseStep(grid, state.octo, { row: state.row, col: state.col });
-      if (state.octo.row === state.row && state.octo.col === state.col) {
-        state.alive = false;
+      state.octopi = state.octopi.map((o) => chaseStep(grid, o, { row: state.row, col: state.col }));
+      if (onOctopus(state.row, state.col)) {
+        state.finished = true;
         pushTrace('caught', action);
         return;
       }
     }
 
-    pushTrace(atGoal ? 'goal' : 'move', action);
-    if (atGoal) state.won = true;
+    if (atGoal) {
+      state.finished = true;
+      if (state.usedOctopusNear) {
+        state.won = true;
+        pushTrace('goal', action);
+      } else {
+        pushTrace('goal-unearned', action);
+      }
+      return;
+    }
+
+    pushTrace('move', action);
   }
 
   const api = {
@@ -717,7 +746,10 @@ function simulateGridMazeChase(levelConfig, userCode) {
     moveUp: () => step(state.row - 1, state.col, 'moveUp'),
     moveDown: () => step(state.row + 1, state.col, 'moveDown'),
     wait: () => step(state.row, state.col, 'wait'),
-    octopusNear: () => Math.abs(state.row - state.octo.row) + Math.abs(state.col - state.octo.col) <= 2,
+    octopusNear: () => {
+      state.usedOctopusNear = true;
+      return state.octopi.some((o) => Math.abs(state.row - o.row) + Math.abs(state.col - o.col) <= 2);
+    },
   };
 
   try {
@@ -730,41 +762,53 @@ function simulateGridMazeChase(levelConfig, userCode) {
   return { trace, success: state.won, error };
 }
 
-// True minimum ticks against a chaser: BFS over (row, col, octoRow, octoCol)
-// — no periodic shortcut like the Scanner's, since the chaser's future
-// depends on the player's whole path, not just the tick number. Fine for
-// mazes this size.
-function computeMinMovesGridChase(levelConfig) {
-  const { grid, start, goal, octopusStart } = levelConfig;
+// Exhaustive joint BFS over every octopus's position is exponential in the
+// number of octopi, so with 3+ chasers it's intractable. Instead this
+// constructs *a* working solution with a greedy reactive policy (prefer
+// moves that don't get caught, then moves that reduce goal-distance, then
+// moves that maximize distance from the nearest octopus) and reports its
+// length. That proves solvability but is not guaranteed to be the true
+// minimum, unlike every other par number in this game — see DESIGN.md.
+function findGreedySolution(levelConfig) {
+  const { grid, start, goal, octopi } = levelConfig;
+  const rows = grid.length;
+  const cols = grid[0].length;
   function isFloor(r, c) {
-    return r >= 0 && r < grid.length && c >= 0 && c < grid[0].length && grid[r][c] !== 'wall';
+    return r >= 0 && r < rows && c >= 0 && c < cols && grid[r][c] !== 'wall';
   }
-  const startKey = `${start.row},${start.col},${octopusStart.row},${octopusStart.col}`;
-  const visited = new Set([startKey]);
-  const queue = [{ row: start.row, col: start.col, octo: octopusStart, dist: 0 }];
+  const goalDist = bfsDistanceMap(grid, goal);
+
+  let player = { ...start };
+  let octoPos = octopi.map((o) => ({ ...o }));
+  const path = [];
   const deltas = [[0, 1], [0, -1], [-1, 0], [1, 0], [0, 0]];
-  let qi = 0;
-  while (qi < queue.length) {
-    const cur = queue[qi++];
-    if (cur.row === goal.row && cur.col === goal.col) return cur.dist;
-    if (cur.dist > MAX_STEPS) continue;
+
+  for (let tick = 0; tick < MAX_STEPS; tick++) {
+    if (player.row === goal.row && player.col === goal.col) return { success: true, moves: path.length };
+
+    let best = null;
     for (const [dr, dc] of deltas) {
-      const nr = cur.row + dr;
-      const nc = cur.col + dc;
+      const nr = player.row + dr;
+      const nc = player.col + dc;
       if (!isFloor(nr, nc)) continue;
-      if (nr === cur.octo.row && nc === cur.octo.col) continue;
-      const nextDist = cur.dist + 1;
-      let nextOcto = cur.octo;
-      if (!(nr === goal.row && nc === goal.col) && nextDist % 2 === 0) {
-        nextOcto = chaseStep(grid, cur.octo, { row: nr, col: nc });
+      if (octoPos.some((o) => o.row === nr && o.col === nc)) continue;
+      const atGoal = nr === goal.row && nc === goal.col;
+      const nextOcto = atGoal || tick % 2 !== 0 ? octoPos : octoPos.map((o) => chaseStep(grid, o, { row: nr, col: nc }));
+      if (nextOcto.some((o) => o.row === nr && o.col === nc)) continue;
+      const minOctoDist = Math.min(...nextOcto.map((o) => Math.abs(o.row - nr) + Math.abs(o.col - nc)));
+      const score = { goalDist: goalDist[nr][nc], minOctoDist, nr, nc, nextOcto };
+      if (!best
+        || score.goalDist < best.goalDist
+        || (score.goalDist === best.goalDist && score.minOctoDist > best.minOctoDist)) {
+        best = score;
       }
-      if (nextOcto.row === nr && nextOcto.col === nc) continue;
-      const key = `${nr},${nc},${nextOcto.row},${nextOcto.col}`;
-      if (visited.has(key)) continue;
-      visited.add(key);
-      queue.push({ row: nr, col: nc, octo: nextOcto, dist: cur.dist + 1 });
     }
+    if (!best) return { success: false, moves: null };
+    player = { row: best.nr, col: best.nc };
+    octoPos = best.nextOcto;
+    path.push(true);
   }
+  return { success: false, moves: null };
   return Infinity;
 }
 
@@ -773,6 +817,7 @@ class GridMazeRunner {
   constructor(p, levelConfig, opts = {}) {
     this.p = p;
     this.level = levelConfig;
+    this.theme = opts.theme || 'vents';
     this.tile = opts.tile || 48;
     this.viewportW = opts.viewportW || levelConfig.grid[0].length * this.tile;
     this.viewportH = opts.viewportH || levelConfig.grid.length * this.tile;
@@ -814,6 +859,7 @@ class GridMazeRunner {
           const last = this.trace[this.trace.length - 1];
           if (this.errorMessage) this.status = 'error';
           else if (last.event === 'goal') this.status = 'won';
+          else if (last.event === 'goal-unearned') this.status = 'goal-unearned';
           else if (last.event === 'blocked') this.status = 'blocked';
           else if (last.event === 'caught') this.status = 'caught';
           else this.status = 'idle';
@@ -859,24 +905,27 @@ class GridMazeRunner {
     };
   }
 
-  // The chaser's position isn't a formula like the drone's — it's baked
-  // into each trace entry (octoRow/octoCol) since it depends on the whole
-  // path so far, so we just interpolate between consecutive trace entries.
-  octopusPos() {
+  // The chasers' positions aren't a formula like the drone's — they're
+  // baked into each trace entry (octoPositions) since they depend on the
+  // whole path so far, so we just interpolate between trace entries.
+  octopusPositions() {
     const from = this.trace[this.stepIndex];
-    if (from.octoRow === undefined) return null;
+    if (!from.octoPositions) return [];
     const to = this.trace[Math.min(this.stepIndex + 1, this.trace.length - 1)];
     const t = this.playing ? clamp(this.stepElapsed / GRID_STEP_TIME, 0, 1) : 1;
     const te = easeInOutQuad(t);
-    return {
-      x: lerp(from.octoCol, to.octoCol, te) * this.tile + this.tile / 2,
-      y: lerp(from.octoRow, to.octoRow, te) * this.tile + this.tile / 2,
-    };
+    return from.octoPositions.map((a, i) => {
+      const b = to.octoPositions[i];
+      return {
+        x: lerp(a.col, b.col, te) * this.tile + this.tile / 2,
+        y: lerp(a.row, b.row, te) * this.tile + this.tile / 2,
+      };
+    });
   }
 
   draw() {
     const p = this.p;
-    p.background(10, 14, 20);
+    p.background(this.theme === 'dungeon' ? this.p.color(14, 9, 8) : this.p.color(10, 14, 20));
     p.push();
     p.translate(-Math.round(this.cameraX), -Math.round(this.cameraY));
     this._drawGrid();
@@ -922,6 +971,26 @@ class GridMazeRunner {
     const cols = grid[0].length;
     const dist = this._distanceField();
     const isFloor = (r, c) => r >= 0 && r < rows && c >= 0 && c < cols && grid[r][c] !== 'wall';
+    const dungeon = this.theme === 'dungeon';
+
+    if (dungeon) {
+      // Brick wall backdrop behind everything — void reads as stonework,
+      // not empty space.
+      p.noStroke();
+      p.fill(20, 14, 12);
+      p.rect(0, 0, cols * this.tile, rows * this.tile);
+      const brickW = 16;
+      const brickH = 8;
+      p.stroke(12, 8, 7);
+      p.strokeWeight(1);
+      for (let y = 0; y < rows * this.tile; y += brickH) {
+        const offset = (Math.floor(y / brickH) % 2) * (brickW / 2);
+        for (let x = -brickW; x < cols * this.tile; x += brickW) {
+          p.line(x + offset, y, x + offset, y + brickH);
+        }
+        p.line(0, y, cols * this.tile, y);
+      }
+    }
 
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
@@ -931,22 +1000,47 @@ class GridMazeRunner {
         const isGoal = r === goal.row && c === goal.col;
 
         p.noStroke();
-        p.fill(isGoal ? p.color(32, 58, 48) : p.color(46, 56, 76));
+        if (dungeon) {
+          p.fill(isGoal ? p.color(32, 58, 48) : p.color(42, 34, 28));
+        } else {
+          p.fill(isGoal ? p.color(32, 58, 48) : p.color(46, 56, 76));
+        }
         p.rect(x + 1, y + 1, this.tile - 2, this.tile - 2, 3);
 
-        // Perimeter glow: a bright edge everywhere the walkable grate meets
+        // Perimeter glow: a bright edge everywhere the walkable floor meets
         // the void, so it's unmistakable which tiles you can stand on.
-        p.stroke(90, 200, 230, 170);
+        p.stroke(dungeon ? p.color(210, 130, 50, 160) : p.color(90, 200, 230, 170));
         p.strokeWeight(2);
         if (!isFloor(r - 1, c)) p.line(x + 2, y + 1, x + this.tile - 2, y + 1);
         if (!isFloor(r + 1, c)) p.line(x + 2, y + this.tile - 1, x + this.tile - 2, y + this.tile - 1);
         if (!isFloor(r, c - 1)) p.line(x + 1, y + 2, x + 1, y + this.tile - 2);
         if (!isFloor(r, c + 1)) p.line(x + this.tile - 1, y + 2, x + this.tile - 1, y + this.tile - 2);
 
-        p.noStroke();
-        p.fill(12, 16, 22, 140);
-        p.circle(x + this.tile * 0.25, y + this.tile * 0.25, 3);
-        p.circle(x + this.tile * 0.75, y + this.tile * 0.75, 3);
+        if (dungeon) {
+          // Sparse torches on wall-adjacent floor tiles, deterministic per
+          // cell so they don't jump around frame to frame.
+          const torchRoll = hash01(r * 37 + c * 91 + 5);
+          const wallAdjacent = !isFloor(r - 1, c) || !isFloor(r + 1, c) || !isFloor(r, c - 1) || !isFloor(r, c + 1);
+          if (wallAdjacent && !isGoal && torchRoll < 0.16) {
+            const flicker = 0.6 + 0.4 * Math.sin(p.millis() * 0.012 + r * 3 + c * 7) + 0.15 * Math.sin(p.millis() * 0.05 + c);
+            const cx = x + this.tile / 2;
+            const cy = y + this.tile / 2;
+            p.noStroke();
+            p.fill(255, 140, 40, 40 * flicker);
+            p.circle(cx, cy, this.tile * 1.6 * flicker);
+            p.fill(90, 60, 30);
+            p.rect(cx - 2, cy - 2, 4, 10, 1);
+            p.fill(255, 170, 60, 220);
+            p.ellipse(cx, cy - 6 - flicker * 2, 6, 10 + flicker * 6);
+            p.fill(255, 220, 120, 200);
+            p.ellipse(cx, cy - 6 - flicker * 2, 3, 5 + flicker * 3);
+          }
+        } else {
+          p.noStroke();
+          p.fill(12, 16, 22, 140);
+          p.circle(x + this.tile * 0.25, y + this.tile * 0.25, 3);
+          p.circle(x + this.tile * 0.75, y + this.tile * 0.75, 3);
+        }
 
         if (isGoal) {
           const pulse = 0.5 + 0.5 * Math.sin(p.millis() * 0.004);
@@ -1021,41 +1115,44 @@ class GridMazeRunner {
   // World 3's chaser: a tiny, cartoonish octopus (not the later game's
   // monster) so it reads as an early, still-approachable threat.
   _drawOctopus() {
-    const pos = this.octopusPos();
-    if (!pos) return;
+    const positions = this.octopusPositions();
+    if (!positions.length) return;
     const p = this.p;
     const t = p.millis() * 0.006;
-    p.push();
-    p.translate(pos.x, pos.y);
+    positions.forEach((pos, idx) => {
+      const hueShift = idx * 40;
+      p.push();
+      p.translate(pos.x, pos.y);
 
-    p.noFill();
-    p.stroke(175, 85, 205, 210);
-    p.strokeWeight(3);
-    const legCount = 5;
-    for (let i = 0; i < legCount; i++) {
-      const baseAngle = (Math.PI * 2 * i) / legCount + Math.PI / 2;
-      const bx = Math.cos(baseAngle) * this.tile * 0.14;
-      const by = Math.sin(baseAngle) * this.tile * 0.08 + this.tile * 0.08;
-      const wave = Math.sin(t * 3 + i) * 4;
-      p.beginShape();
-      p.curveVertex(bx, by);
-      p.curveVertex(bx, by);
-      p.curveVertex(bx + wave, by + this.tile * 0.16);
-      p.curveVertex(bx - wave * 0.6, by + this.tile * 0.26);
-      p.curveVertex(bx - wave * 0.6, by + this.tile * 0.26);
-      p.endShape();
-    }
+      p.noFill();
+      p.stroke(175 - hueShift * 0.3, 85 + hueShift * 0.4, 205 - hueShift * 0.2, 210);
+      p.strokeWeight(3);
+      const legCount = 5;
+      for (let i = 0; i < legCount; i++) {
+        const baseAngle = (Math.PI * 2 * i) / legCount + Math.PI / 2;
+        const bx = Math.cos(baseAngle) * this.tile * 0.14;
+        const by = Math.sin(baseAngle) * this.tile * 0.08 + this.tile * 0.08;
+        const wave = Math.sin(t * 3 + i + idx) * 4;
+        p.beginShape();
+        p.curveVertex(bx, by);
+        p.curveVertex(bx, by);
+        p.curveVertex(bx + wave, by + this.tile * 0.16);
+        p.curveVertex(bx - wave * 0.6, by + this.tile * 0.26);
+        p.curveVertex(bx - wave * 0.6, by + this.tile * 0.26);
+        p.endShape();
+      }
 
-    p.noStroke();
-    p.fill(175, 85, 205);
-    p.ellipse(0, 0, this.tile * 0.5, this.tile * 0.4);
-    p.fill(255);
-    p.circle(-6, -3, 8);
-    p.circle(6, -3, 8);
-    p.fill(20, 10, 25);
-    p.circle(-6, -3, 4);
-    p.circle(6, -3, 4);
-    p.pop();
+      p.noStroke();
+      p.fill(175 - hueShift * 0.3, 85 + hueShift * 0.4, 205 - hueShift * 0.2);
+      p.ellipse(0, 0, this.tile * 0.5, this.tile * 0.4);
+      p.fill(255);
+      p.circle(-6, -3, 8);
+      p.circle(6, -3, 8);
+      p.fill(20, 10, 25);
+      p.circle(-6, -3, 4);
+      p.circle(6, -3, 4);
+      p.pop();
+    });
   }
 
   _drawPlayer() {

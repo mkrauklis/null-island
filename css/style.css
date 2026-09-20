@@ -135,8 +135,14 @@ header.hero p {
 }
 
 #status.fell,
-#status.error {
+#status.error,
+#status.blocked,
+#status.caught {
   color: var(--danger);
+}
+
+#status.goal-unearned {
+  color: #f4c542;
 }
 
 .hint {

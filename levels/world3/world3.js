@@ -1,8 +1,11 @@
-// World 3 — The Dungeon Halls (MVP slice). Conditionals. A generated maze
-// with a small octopus that chases you — greedy shortest-path toward your
-// current position, recomputed after every move you make. Still fully
-// deterministic and simulate-at-build-time, same as every other world: see
-// DESIGN.md.
+// World 3 — The Dungeon Halls. Conditionals. A generated maze with three
+// small octopi that chase you — greedy shortest-path toward your current
+// position, recomputed after every move you make. Still deterministic and
+// simulate-at-build-time, same as every other world: see DESIGN.md.
+//
+// Winning requires the code to have called octopusNear() at least once —
+// enforced by the simulator, not a physical impossibility (see DESIGN.md's
+// note on why that's the honest framing for a fully deterministic engine).
 const WORLD_ID = 'world3';
 
 function bfsPath(grid, start, goal) {
@@ -35,40 +38,37 @@ function bfsPath(grid, start, goal) {
 
 function generateLevel(seed) {
   const rng = mulberry32(seed);
-  const mazeRows = 3;
-  const mazeCols = 5 + Math.floor(rng() * 2); // 5..6 cells — a bit more room for dead ends
+  const mazeRows = 4 + Math.floor(rng() * 2); // 4..5 cells
+  const mazeCols = 6 + Math.floor(rng() * 3); // 6..8 cells
   const grid = generateMaze(mazeRows, mazeCols, rng);
   const start = { row: grid.length - 2, col: 1 };
   const goal = { row: 1, col: grid[0].length - 2 };
   const solutionPath = bfsPath(grid, start, goal);
   const onPath = new Set(solutionPath.map((c) => `${c.row},${c.col}`));
 
-  // A perfect maze (recursive backtracker) has exactly one route between
-  // any two points, so an octopus that starts ON that route can simply
-  // walk straight at the player with no way for them to get around it —
-  // that's the "Par: Infinity" bug this fixes. Starting it in a dead-end
-  // branch instead means the player only has to worry about it near that
-  // branch's junction, not the whole route.
   const offPathCells = [];
   for (let r = 1; r < grid.length; r += 2) {
     for (let c = 1; c < grid[0].length; c += 2) {
       if (grid[r][c] === 'floor' && !onPath.has(`${r},${c}`)) offPathCells.push({ row: r, col: c });
     }
   }
+  const pool = offPathCells.length >= 3 ? offPathCells : solutionPath.slice(1, -1);
 
-  const candidates = shuffleWithRng(offPathCells.length ? offPathCells : solutionPath.slice(1, -1), rng);
-  for (const octopusStart of candidates) {
-    const level = { grid, start, goal, octopusStart };
-    const par = computeMinMovesGridChase(level);
-    if (par !== Infinity) {
-      level.parMoves = par;
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const picks = shuffleWithRng(pool, rng).slice(0, 3);
+    while (picks.length < 3) picks.push(pool[Math.floor(rng() * pool.length)]);
+    const level = { grid, start, goal, octopi: picks };
+    const solution = findGreedySolution(level);
+    if (solution.success) {
+      level.parMoves = solution.moves;
       return level;
     }
   }
-  // Last resort (shouldn't normally hit this): tuck it in the corner
-  // farthest from both start and goal.
-  const level = { grid, start, goal, octopusStart: { row: grid.length - 2, col: grid[0].length - 2 } };
-  level.parMoves = computeMinMovesGridChase(level);
+  // Last resort: tuck all three far from both start and goal.
+  const corner = { row: grid.length - 2, col: grid[0].length - 2 };
+  const level = { grid, start, goal, octopi: [corner, corner, corner] };
+  const solution = findGreedySolution(level);
+  level.parMoves = solution.success ? solution.moves : 0;
   return level;
 }
 
@@ -94,9 +94,9 @@ let errorLine = null;
 
 function sketch(p) {
   p.setup = () => {
-    const canvas = p.createCanvas(440, 360);
+    const canvas = p.createCanvas(480, 384);
     canvas.parent('level-canvas-holder');
-    runner = new GridMazeRunner(p, LEVEL, { tile: 40, viewportW: 440, viewportH: 360 });
+    runner = new GridMazeRunner(p, LEVEL, { tile: 40, viewportW: 480, viewportH: 384, theme: 'dungeon' });
     lastFrameMs = performance.now();
   };
 
@@ -114,7 +114,7 @@ function renderWorldMeta() {
   const el = document.getElementById('world-meta');
   const state = Progress.getWorld(WORLD_ID);
   if (!state.cleared) {
-    el.textContent = `Par: ${LEVEL.parMoves} moves — the fewest moves anyone's found to clear this. Match it for a star.`;
+    el.textContent = `Par: ${LEVEL.parMoves} moves (a working solution, not a proven minimum — see the hint). Match it for a star.`;
     return;
   }
   const starred = state.bestMoves <= LEVEL.parMoves;
@@ -140,9 +140,12 @@ function renderStatus() {
   switch (runner.status) {
     case 'won': {
       const r = resultCache;
-      statusEl.textContent = `Escaped the hall in ${r.moves} moves — best ${r.bestMoves}${r.starred ? ' ★' : ''} (par ${LEVEL.parMoves}).`;
+      statusEl.textContent = `Escaped the halls in ${r.moves} moves — best ${r.bestMoves}${r.starred ? ' ★' : ''} (par ${LEVEL.parMoves}).`;
       break;
     }
+    case 'goal-unearned':
+      statusEl.textContent = "You reached the exit, but never checked octopusNear() — the Dungeon Halls doesn't count that as an escape. React to the octopi, don't just script around them.";
+      break;
     case 'blocked': {
       const last = runner.trace[runner.trace.length - 1];
       statusEl.textContent = `Move ${last.tick}: that's a wall (row ${last.row}, col ${last.col}). Edit your code and run again.`;
@@ -150,7 +153,7 @@ function renderStatus() {
     }
     case 'caught': {
       const last = runner.trace[runner.trace.length - 1];
-      statusEl.textContent = `Move ${last.tick}: the octopus got you at (row ${last.row}, col ${last.col}). It always takes the shortest path toward wherever you just moved — try checking octopusNear() before you commit to a move.`;
+      statusEl.textContent = `Move ${last.tick}: an octopus got you at (row ${last.row}, col ${last.col}). Each one always takes the shortest path toward wherever you just moved (at half your speed) — try checking octopusNear() before you commit.`;
       break;
     }
     case 'error':
@@ -253,7 +256,7 @@ function runCode() {
 
 window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('level-hint').textContent =
-    `Par is ${LEVEL.parMoves} moves. octopusNear() tells you if it's within 2 tiles right now — use it to decide your next move instead of committing to a fixed script.`;
+    `Par is ${LEVEL.parMoves} moves — a working solution's length, not a proven minimum (three chasers make an exhaustive search impractical). octopusNear() tells you if any octopus is within 2 tiles right now, and you have to actually call it to escape — a fixed script that never checks won't count, even if it happens to reach the exit.`;
 
   editor = CodeMirror.fromTextArea(document.getElementById('code'), {
     mode: 'javascript',
