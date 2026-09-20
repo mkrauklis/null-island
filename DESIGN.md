@@ -261,6 +261,13 @@ is cheap to call even when nothing changes — it only tears down and
 restarts the animation when the rank *title* actually changes, and no-ops
 back to hidden below Webbed.
 
+World Select also shows a full ranks board (`renderRankBoard`, below the
+world grid) — every tier from `RANKS`, unlocked ones in their real color
+with a border, locked ones dimmed via opacity, and the player's current
+tier labeled "You are here." Unlike the achievement grid, locked rank
+titles aren't hidden behind "???" — a rank name and its win requirement
+aren't a mystery to preserve, just a target not yet reached.
+
 ## World 3 lighting
 
 Dungeon-theme grid mazes render mostly dark, lit only by torches (placed by
