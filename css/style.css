@@ -488,6 +488,54 @@ select {
   margin-top: 0.4rem;
 }
 
+/* Enemy guide */
+.enemy-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+}
+
+@media (min-width: 800px) {
+  .enemy-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.enemy-card {
+  text-align: center;
+}
+
+.enemy-canvas {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.75rem;
+}
+
+.enemy-canvas canvas {
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.enemy-card h2 {
+  margin: 0 0 0.15rem;
+  font-size: 1.1rem;
+}
+
+.enemy-world {
+  color: var(--dim);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.6rem;
+}
+
+.enemy-card p {
+  font-size: 0.9rem;
+  color: var(--ink);
+  text-align: left;
+}
+
 /* Achievements */
 .achievement-grid {
   display: grid;

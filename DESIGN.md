@@ -502,11 +502,25 @@ of slots plus New/Rename/Delete) and a one-line indicator + "switch save"
 link on `worlds.html`. Rename/delete use plain `prompt()`/`confirm()` —
 no custom modal, consistent with how "Reset progress" already works.
 
+## Enemy guide
+
+`enemies.html`, linked from World Select. One card per hazard (Scanner,
+Octopus, Squid — the three built so far), each with a small looping demo
+animation. Deliberately reuses the real rendering, not a redrawn copy: each
+card builds a tiny fake level (`{grid, start, goal, scanner/octopi/squid}`)
+and a real `GridMazeRunner`, so `runner.draw()` calls the exact same
+`_drawScanner`/`_drawOctopus`/`_drawSquid` the actual worlds use — this
+guide can never visually drift from what a world actually shows, since
+there's nothing to keep in sync by hand. The demo trace is just `wait()`
+repeated (player holds still, hazard still animates from `tick`), reloaded
+every time it finishes so it loops forever.
+
 ## Repo conventions
 
 - `index.html` — splash screen (title, premise, one link into `worlds.html`).
 - `worlds.html` — world select / settings: every world's lock state, best
   score, par, and star; also where "reset progress" lives.
+- `enemies.html` — enemy guide, one looping demo card per hazard.
 - `levels/worldN/` — one folder per world, `index.html` + level-specific JS.
 - `js/engine.js` — shared engine: level simulation (side-scroller and grid
   maze), par/BFS helpers, trace playback, rendering. Reused across worlds;

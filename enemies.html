@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Enemy Guide — Null Island</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="hero" style="padding:2.5rem 1.5rem 1rem;">
+  <h1 style="font-size:2rem;">Enemy Guide</h1>
+  <p>Every hazard on the island, in one place — what it looks like, which
+  world it's in, and how to get past it.</p>
+</header>
+<div class="wrap">
+  <p style="text-align:center;"><a href="worlds.html">&larr; back to World Select</a></p>
+  <div class="enemy-grid" id="enemy-grid"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<script src="js/engine.js"></script>
+<script>
+// Each enemy gets its own tiny, looping demo level + GridMazeRunner —
+// reusing the exact same rendering the real worlds use (_drawScanner/
+// _drawOctopus/_drawSquid via runner.draw()), not a redrawn copy, so this
+// guide can never visually drift from what a world actually shows. The
+// player token holds still (an all-wait() trace) purely so the hazard's
+// own motion is what draws the eye; once a trace finishes it's reloaded
+// to loop forever.
+const ENEMIES = [
+  {
+    title: 'Scanner',
+    world: 'World 2 — The Vents (Loops)',
+    description: 'A patrol drone that steps once every tick you do — including wait(). ' +
+      'It walks a fixed back-and-forth path. Time your moves (or a wait()) so you’re never ' +
+      'standing where it lands.',
+    theme: 'vents',
+    buildLevel() {
+      return {
+        grid: [
+          ['wall', 'wall', 'wall', 'wall', 'wall'],
+          ['wall', 'floor', 'floor', 'floor', 'wall'],
+          ['wall', 'wall', 'wall', 'wall', 'wall'],
+        ],
+        start: { row: 1, col: 2 },
+        goal: { row: 1, col: 2 },
+        scanner: { path: [{ row: 1, col: 1 }, { row: 1, col: 2 }, { row: 1, col: 3 }, { row: 1, col: 2 }] },
+      };
+    },
+    buildTrace(level) {
+      const trace = [{ row: 1, col: 2, event: 'start', tick: 0 }];
+      for (let i = 1; i <= 16; i++) trace.push({ row: 1, col: 2, event: 'move', action: 'wait', tick: i });
+      return trace;
+    },
+  },
+  {
+    title: 'Octopus',
+    world: 'World 3 — The Dungeon Halls (Conditionals)',
+    description: 'Chases you: one greedy step toward wherever you just moved, every other tick ' +
+      '(half your speed). octopusNear() tells you if one is within 2 tiles right now — react to ' +
+      'it instead of committing to a fixed path.',
+    theme: 'dungeon',
+    buildLevel() {
+      return {
+        grid: [
+          ['wall', 'wall', 'wall', 'wall', 'wall'],
+          ['wall', 'floor', 'floor', 'floor', 'wall'],
+          ['wall', 'wall', 'wall', 'wall', 'wall'],
+        ],
+        start: { row: 1, col: 1 },
+        goal: { row: 1, col: 1 },
+      };
+    },
+    buildTrace(level) {
+      const trace = [{ row: 1, col: 1, octoPositions: [{ row: 1, col: 3 }], event: 'start', tick: 0 }];
+      const cols = [3, 3, 2, 2, 3, 3, 2, 2];
+      for (let i = 0; i < 16; i++) {
+        trace.push({ row: 1, col: 1, octoPositions: [{ row: 1, col: cols[i % cols.length] }], event: 'move', action: 'wait', tick: i + 1 });
+      }
+      return trace;
+    },
+  },
+  {
+    title: 'Squid',
+    world: 'World 4 — The Foundry (Functions)',
+    description: 'Red Light, Green Light: watches the whole room on a fixed cycle. Grey eye, ' +
+      'looking around — safe to move. Red eye, watching — any move at all gets you caught, ' +
+      'wherever you are. wait() is always safe.',
+    theme: 'foundry',
+    buildLevel() {
+      return {
+        grid: [
+          new Array(5).fill('wall'),
+          ['wall', 'floor', 'floor', 'floor', 'wall'],
+        ],
+        start: { row: 1, col: 2 },
+        goal: { row: 1, col: 2 },
+        squid: { pattern: [false, false, false, true, true, true] },
+      };
+    },
+    buildTrace(level) {
+      const trace = [{ row: 1, col: 2, event: 'start', tick: 0 }];
+      for (let i = 1; i <= 18; i++) trace.push({ row: 1, col: 2, event: 'move', action: 'wait', tick: i });
+      return trace;
+    },
+  },
+];
+
+function mountEnemy(enemy) {
+  const card = document.createElement('div');
+  card.className = 'panel enemy-card';
+  card.innerHTML = `
+    <div class="enemy-canvas" id="canvas-${enemy.title}"></div>
+    <h2>${enemy.title}</h2>
+    <div class="enemy-world">${enemy.world}</div>
+    <p>${enemy.description}</p>
+  `;
+  document.getElementById('enemy-grid').appendChild(card);
+
+  const level = enemy.buildLevel();
+  const trace = enemy.buildTrace(level);
+  let runner;
+  let lastFrameMs;
+
+  new p5((p) => {
+    p.setup = () => {
+      const canvas = p.createCanvas(220, 132);
+      canvas.parent(`canvas-${enemy.title}`);
+      runner = new GridMazeRunner(p, level, { tile: 40, viewportW: 220, viewportH: 132, theme: enemy.theme });
+      runner.loadTrace(trace, true, null);
+      lastFrameMs = performance.now();
+    };
+    p.draw = () => {
+      const now = performance.now();
+      const dt = (now - lastFrameMs) / 1000;
+      lastFrameMs = now;
+      if (!runner.playing) runner.loadTrace(trace, true, null);
+      runner.update(dt);
+      runner.draw();
+    };
+  });
+}
+
+ENEMIES.forEach(mountEnemy);
+</script>
+</body>
+</html>
