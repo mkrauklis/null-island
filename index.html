@@ -19,6 +19,15 @@
 </header>
 
 <div class="wrap">
+  <div class="panel save-panel">
+    <h2 style="margin-top:0; text-align:center; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; font-size:0.9rem;">Save file</h2>
+    <div class="save-row">
+      <select id="slot-select"></select>
+      <button class="button secondary" id="new-save-btn" type="button">New Save</button>
+      <button class="button secondary" id="rename-save-btn" type="button">Rename</button>
+      <button class="button danger" id="delete-save-btn" type="button">Delete</button>
+    </div>
+  </div>
   <div class="panel character-panel">
     <h2 style="margin-top:0; text-align:center; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; font-size:0.9rem;">Customize your character</h2>
     <div class="character-layout">
@@ -76,6 +85,30 @@ const ACCESSORIES = [
 
 let character = Progress.getCharacter();
 let previewP;
+
+function renderSlotSelect() {
+  const el = document.getElementById('slot-select');
+  const slots = Progress.listSlots();
+  const activeId = Progress.getActiveSlotId();
+  el.innerHTML = '';
+  slots.forEach((s) => {
+    const summary = Progress.getSlotSummary(s.id);
+    const winWord = summary.wins === 1 ? 'win' : 'wins';
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = `${s.name} — ${summary.wins} ${winWord}, ${summary.worldsCleared} cleared`;
+    if (s.id === activeId) opt.selected = true;
+    el.appendChild(opt);
+  });
+}
+
+function reloadForActiveSlot() {
+  character = Progress.getCharacter();
+  renderSwatches();
+  renderSkinButtons();
+  renderAccessoryButtons();
+  renderSlotSelect();
+}
 
 function renderSwatches() {
   const el = document.getElementById('color-swatches');
@@ -156,7 +189,35 @@ function sketch(p) {
   };
 }
 
+document.getElementById('slot-select').addEventListener('change', (e) => {
+  Progress.switchActiveSlot(e.target.value);
+  reloadForActiveSlot();
+});
+
+document.getElementById('new-save-btn').addEventListener('click', () => {
+  const name = prompt('Name this save:', `Slot ${Progress.listSlots().length + 1}`);
+  if (name === null) return;
+  Progress.createSlot(name.trim());
+  reloadForActiveSlot();
+});
+
+document.getElementById('rename-save-btn').addEventListener('click', () => {
+  const current = Progress.getActiveSlot();
+  const name = prompt('Rename this save:', current.name);
+  if (name === null || !name.trim()) return;
+  Progress.renameSlot(current.id, name.trim());
+  renderSlotSelect();
+});
+
+document.getElementById('delete-save-btn').addEventListener('click', () => {
+  const current = Progress.getActiveSlot();
+  if (!confirm(`Delete "${current.name}"? This can't be undone.`)) return;
+  Progress.deleteSlot(current.id);
+  reloadForActiveSlot();
+});
+
 window.addEventListener('DOMContentLoaded', () => {
+  renderSlotSelect();
   renderSwatches();
   renderSkinButtons();
   renderAccessoryButtons();

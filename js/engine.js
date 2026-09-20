@@ -853,18 +853,67 @@ class SideScrollerRunner {
 
 const GRID_STEP_TIME = 0.3; // seconds per tick, movement or wait alike
 
+// Which for/while/if a given (1-indexed) line sits inside, so playback can
+// show a loop or conditional as "active" for as long as execution stays
+// somewhere in its body — not just the one leaf line with the actual
+// moveX()/wait() call, which is all the trace's `.line` data captures on
+// its own (those are the only calls we get a stack-trace hook into; a
+// `for(...)` header itself never calls any of our injected api functions).
+// Parsed with Acorn (already loaded on every world page for syntax-error
+// detection) and cached by source text so a 60fps render loop isn't
+// re-parsing the same code every frame.
+let _controlLinesCache = { code: null, nodes: [] };
+const CONTROL_NODE_TYPES = new Set([
+  'ForStatement', 'ForOfStatement', 'ForInStatement',
+  'WhileStatement', 'DoWhileStatement', 'IfStatement',
+]);
+function computeControlLines(code) {
+  if (_controlLinesCache.code === code) return _controlLinesCache.nodes;
+  let nodes = [];
+  try {
+    const ast = acorn.parse(code, { ecmaVersion: 2020, locations: true });
+    (function visit(node) {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(visit); return; }
+      if (typeof node.type === 'string' && node.loc && CONTROL_NODE_TYPES.has(node.type)) {
+        nodes.push({ headerLine: node.loc.start.line, bodyStartLine: node.loc.start.line, bodyEndLine: node.loc.end.line });
+      }
+      Object.keys(node).forEach((key) => {
+        if (key === 'loc' || key === 'start' || key === 'end' || key === 'range') return;
+        visit(node[key]);
+      });
+    })(ast);
+  } catch (e) {
+    nodes = []; // unparsable mid-edit code just means no outer-highlight, not a crash
+  }
+  _controlLinesCache = { code, nodes };
+  return nodes;
+}
+
 // Line-pointer during trace playback: highlights the CodeMirror line whose
-// call produced the step currently animating, cleared once playback stops.
-// Shared across all four worlds' render loops (called once per frame from
-// each world's own renderStatus()) since the sync logic is identical
-// regardless of which simulate function produced the trace's `.line` data.
+// call produced the step currently animating (bright), plus any enclosing
+// for/while/if header line(s) (dim), cleared once playback stops. Shared
+// across all five worlds' render loops (called once per frame from each
+// world's own renderStatus()) since the sync logic is identical regardless
+// of which simulate function produced the trace's `.line` data.
 let _highlightedLine = null; // 0-indexed CodeMirror line currently marked, or null
+let _highlightedOuterLines = []; // 0-indexed lines marked with the dim "enclosing" style
 function syncCodeHighlight(editor, runner) {
   let target = null;
   if (runner && runner.playing) {
     const entry = runner.trace[Math.min(runner.stepIndex + 1, runner.trace.length - 1)];
     if (entry && entry.line !== null && entry.line !== undefined) target = entry.line - 1;
   }
+
+  let outerTargets = [];
+  if (target !== null && typeof acorn !== 'undefined') {
+    const lineNum = target + 1;
+    const nodes = computeControlLines(editor.getValue());
+    outerTargets = nodes
+      .filter((n) => lineNum >= n.bodyStartLine && lineNum <= n.bodyEndLine && n.headerLine !== lineNum)
+      .map((n) => n.headerLine - 1);
+  }
+
   if (_highlightedLine !== null && _highlightedLine !== target) {
     editor.removeLineClass(_highlightedLine, 'background', 'cm-current-line');
   }
@@ -872,6 +921,14 @@ function syncCodeHighlight(editor, runner) {
     editor.addLineClass(target, 'background', 'cm-current-line');
   }
   _highlightedLine = target;
+
+  _highlightedOuterLines.forEach((l) => {
+    if (!outerTargets.includes(l)) editor.removeLineClass(l, 'background', 'cm-current-line-outer');
+  });
+  outerTargets.forEach((l) => {
+    if (!_highlightedOuterLines.includes(l)) editor.addLineClass(l, 'background', 'cm-current-line-outer');
+  });
+  _highlightedOuterLines = outerTargets;
 }
 
 function scannerPositionAt(scanner, tick) {

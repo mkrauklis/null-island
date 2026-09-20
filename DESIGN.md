@@ -251,8 +251,25 @@ called `player code → arrow wrapper → step() → getCallerLine()`, always th
 same shape). This is a V8-specific trick, not a spec guarantee; on an
 engine where the stack shape doesn't match, `getCallerLine()` just returns
 `null` and playback quietly skips the highlight rather than breaking
-anything. `syncCodeHighlight(editor, runner)` is shared by all four worlds'
-render loops — one function, not four copies.
+anything. `syncCodeHighlight(editor, runner)` is shared by all five worlds'
+render loops — one function, not five copies.
+
+**Extended to show `for`/`while`/`if` too, not just the leaf call.** A
+`for(...)` or `if(...)` header never calls any injected api function, so
+there's no stack-trace hook for it the way there is for `moveRight()` —
+`getCallerLine()` only ever sees the one line with the actual call. Instead,
+`computeControlLines(code)` parses the code with Acorn (already loaded for
+syntax-error detection) into an AST, walks it generically (recurse into
+every object/array property, not a hardcoded set of node shapes — works
+without needing acorn-walk), and records every `For*`/`While*`/`IfStatement`
+node's header line plus its body's line range. `syncCodeHighlight` then
+marks the leaf line bright (`cm-current-line`, unchanged) and every
+enclosing header line dim (`cm-current-line-outer`) — so a loop or
+conditional stays lit for as long as execution is anywhere inside its body,
+not just one instant, which is what actually reads as "this loop is
+running" across several iterations rather than a single flash. Cached by
+source text so a 60fps render loop isn't re-parsing on every frame; an
+unparsable mid-edit code string just yields no outer-highlight, not a crash.
 
 ### World 5 — The Vault — built
 **Teaches:** arrays/objects.
@@ -300,9 +317,14 @@ finish, where a **helicopter is waiting outside** — the ending.
 ## The player character
 
 Customizable from a panel on the splash screen (`index.html`): species
-("skin" — capuchin, gorilla, manatee, or proboscis monkey), one of 8 fur
-colors, and one cosmetic (party hat, top hat, santa hat, angel wings, tutu,
-beard, or a torch hat unlocked by clearing World 3).
+("skin" — capuchin, gorilla, manatee, proboscis monkey, or spider monkey),
+a fur color (most are flat, but "clouds" is a texture — a pale base plus a
+decorative overlay pass of white puffs, drawn once in `drawCharacter` so it
+doesn't have to be plumbed into every skin's own fill calls), and one
+cosmetic. Both colors and cosmetics can be locked behind a `requiresWorld`
+(same shape for both — `COLORS`/`ACCESSORIES` in `index.html` — checked via
+`Progress.getWorld(<id>).cleared` directly, one source of truth, no
+separate unlock flag).
 `Progress.getCharacter()`/`setCharacter()` store the choice in localStorage,
 deliberately outside `resetAll()` — it's a cosmetic preference, not
 progress, so "reset progress" doesn't silently undo it. Unlockable
@@ -372,6 +394,45 @@ source (`GridMazeRunner._drawDarkness`) — soft falloff instead of a hard
 circle. World 2 (theme `'vents'`) is unaffected; the darkness pass no-ops
 for any theme but `'dungeon'`.
 
+## Save slots (multiple games)
+
+Everything `Progress` reads/writes — worlds progress, seeds, snippets,
+achievements, wins, character — is scoped to a "slot" (one save file), so
+more than one person can play on the same browser without overwriting each
+other. The six data keys that used to be the whole story are now just
+suffixes; `Progress._key(suffix)` prefixes whichever slot is active
+(`` `null-island:slot:${activeId}:${suffix}` ``). Slot bookkeeping itself —
+the slot list and which one is active — deliberately lives *outside* that
+scoping, under its own un-prefixed keys, since it has to be readable before
+you know which slot you're in.
+
+This was a refactor entirely inside `progress.js`: every other file (all
+five level scripts, `worlds.html`, `index.html`) already only ever touched
+save data through `Progress`'s methods, never `localStorage` directly, so
+none of them needed to change at all — confirmed by grepping the whole repo
+for `localStorage` before starting and finding it nowhere outside this file.
+
+New methods: `listSlots`/`getActiveSlotId`/`getActiveSlot`/`createSlot`/
+`switchActiveSlot`/`renameSlot`/`deleteSlot`, plus `getSlotSummary(id)` for
+reading a slot's wins/cleared-count *without* switching into it first (for
+a save picker that shows every slot's progress at once). `deleteSlot` never
+leaves zero slots — deleting the last one immediately creates a fresh
+"Slot 1" in its place, so every other method always has somewhere valid to
+read/write.
+
+**Migration:** the first time `_ensureSlots()` runs and finds no slot index
+yet, it checks whether real data exists under the old un-prefixed keys
+(pre-dating this feature) and, if so, copies it into a new "Slot 1" rather
+than orphaning it — copies, doesn't delete, so the legacy keys are harmless
+leftovers rather than a silent data-loss risk. Verified by seeding legacy
+keys by hand and confirming every field (progress, wins, character,
+achievements) survives into the new slot untouched.
+
+UI lives on the splash screen (`index.html`, "Save file" panel: a `<select>`
+of slots plus New/Rename/Delete) and a one-line indicator + "switch save"
+link on `worlds.html`. Rename/delete use plain `prompt()`/`confirm()` —
+no custom modal, consistent with how "Reset progress" already works.
+
 ## Repo conventions
 
 - `index.html` — splash screen (title, premise, one link into `worlds.html`).
@@ -381,8 +442,10 @@ for any theme but `'dungeon'`.
 - `js/engine.js` — shared engine: level simulation (side-scroller and grid
   maze), par/BFS helpers, trace playback, rendering. Reused across worlds;
   world-specific level data stays in each world's own folder.
-- `js/progress.js` — localStorage save data: clears, best moves, per-world
-  seed and generated par, unlocked command-palette snippets, achievements.
+- `js/progress.js` — localStorage save data, scoped to a save slot: clears,
+  best moves, per-world seed and generated par, unlocked command-palette
+  snippets, achievements, wins, character. Also owns slot management itself
+  (create/switch/rename/delete) — see "Save slots" above.
 - `js/worlds-registry.js` — static ordered metadata for all six worlds. Its
   `parMoves` is only a placeholder shown before a player has ever generated
   that world's real (seeded) layout.

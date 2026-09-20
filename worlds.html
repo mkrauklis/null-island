@@ -17,6 +17,7 @@
     <canvas id="rank-particles"></canvas>
     <div id="rank-badge" class="rank-badge"></div>
   </div>
+  <p id="save-indicator" style="color:var(--dim); font-size:0.85rem; margin-top:0.75rem;"></p>
 </header>
 <div class="wrap">
   <p style="text-align:center;"><a href="index.html">&larr; back to title</a></p>
@@ -38,6 +39,12 @@
 <script src="js/rank-particles.js"></script>
 <script src="js/progress.js"></script>
 <script>
+function renderSaveIndicator() {
+  const el = document.getElementById('save-indicator');
+  const slot = Progress.getActiveSlot();
+  el.innerHTML = `Save: <strong>${slot.name}</strong> — <a href="index.html">switch save</a>`;
+}
+
 function renderRank() {
   const el = document.getElementById('rank-badge');
   const rank = computeRank();
@@ -145,6 +152,7 @@ document.getElementById('reset-btn').addEventListener('click', () => {
 });
 
 checkEscapeeAchievement(WORLDS);
+renderSaveIndicator();
 renderGrid();
 renderAchievements();
 renderRank();

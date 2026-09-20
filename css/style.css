@@ -117,6 +117,10 @@ header.hero p {
   background: rgba(61, 220, 132, 0.16) !important;
 }
 
+.cm-current-line-outer {
+  background: rgba(61, 220, 132, 0.06) !important;
+}
+
 .cm-error-text {
   border-bottom: 2px wavy var(--danger);
   text-decoration: underline wavy var(--danger);
@@ -155,6 +159,31 @@ header.hero p {
   color: var(--dim);
   font-size: 0.9rem;
   line-height: 1.5;
+}
+
+/* Save slots */
+.save-panel {
+  max-width: 520px;
+  margin: 2rem auto 0;
+}
+
+.save-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  align-items: center;
+}
+
+select {
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.7rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+  max-width: 100%;
 }
 
 /* Character customizer */
