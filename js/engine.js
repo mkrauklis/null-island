@@ -361,6 +361,9 @@ function drawCharacter(p, tile, opts = {}) {
   else if (skin === 'proboscis') drawProboscisBody(p, s, fr, fg, fb, legSwing);
   else if (skin === 'spiderMonkey') drawSpiderMonkeyBody(p, s, fr, fg, fb, legSwing);
   else if (skin === 'narwhal') drawNarwhalBody(p, s, fr, fg, fb, legSwing);
+  else if (skin === 'catfish') drawCatfishBody(p, s, fr, fg, fb, legSwing);
+  else if (skin === 'koi') drawKoiBody(p, s, fr, fg, fb, legSwing);
+  else if (skin === 'shark') drawSharkBody(p, s, fr, fg, fb, legSwing);
   else drawCapuchinBody(p, s, fr, fg, fb, legSwing);
 
   drawAccessory(p, s, accessory);
@@ -548,6 +551,152 @@ function drawNarwhalBody(p, s, fr, fg, fb, legSwing) {
   p.fill(20, 15, 12);
   p.circle(-4 * s, -13 * s, 1.8 * s);
   p.circle(4 * s, -13 * s, 1.8 * s);
+  p.pop();
+}
+
+function drawCatfishBody(p, s, fr, fg, fb, legSwing) {
+  const wobble = legSwing * 0.015;
+  p.push();
+  p.rotate(wobble);
+
+  // angled pectoral fins + a forked tail instead of legs
+  p.noStroke();
+  p.fill(fr * 0.7, fg * 0.7, fb * 0.7);
+  p.triangle(-9 * s, 3 * s, -17 * s, 8 * s, -8 * s, 10 * s);
+  p.triangle(9 * s, 3 * s, 17 * s, 8 * s, 8 * s, 10 * s);
+  p.triangle(-3 * s, 14 * s, -9 * s, 24 * s, 0, 17 * s);
+  p.triangle(3 * s, 14 * s, 9 * s, 24 * s, 0, 17 * s);
+
+  // long body
+  p.fill(fr, fg, fb);
+  p.ellipse(0, 0, 18 * s, 22 * s);
+
+  // dorsal fin ridge
+  p.fill(fr * 0.8, fg * 0.8, fb * 0.8);
+  p.triangle(-2 * s, -4 * s, 0, -12 * s, 4 * s, -3 * s);
+
+  // wide, flat head
+  p.fill(fr * 0.95, fg * 0.95, fb * 0.95);
+  p.ellipse(0, -9 * s, 16 * s, 11 * s);
+
+  // long trailing whiskers (barbels) from the corners of the mouth —
+  // catfish are named for these regardless of body color
+  p.stroke(fr * 0.6, fg * 0.6, fb * 0.6);
+  p.strokeWeight(1 * s);
+  p.noFill();
+  [-1, 1].forEach((side) => {
+    p.beginShape();
+    p.curveVertex(side * 7 * s, -6 * s);
+    p.curveVertex(side * 7 * s, -6 * s);
+    p.curveVertex(side * 11 * s, -2 * s);
+    p.curveVertex(side * 13 * s, 4 * s);
+    p.curveVertex(side * 13 * s, 4 * s);
+    p.endShape();
+  });
+
+  // small eyes near the top of the head
+  p.noStroke();
+  p.fill(20, 15, 12);
+  p.circle(-4 * s, -12 * s, 1.8 * s);
+  p.circle(4 * s, -12 * s, 1.8 * s);
+  p.pop();
+}
+
+function drawKoiBody(p, s, fr, fg, fb, legSwing) {
+  const wobble = legSwing * 0.015;
+  p.push();
+  p.rotate(wobble);
+
+  // pectoral fins + a big flowing tail fan instead of legs
+  p.noStroke();
+  p.fill(fr * 0.75, fg * 0.75, fb * 0.75, 220);
+  p.ellipse(-10 * s, 4 * s, 8 * s, 5 * s);
+  p.ellipse(10 * s, 4 * s, 8 * s, 5 * s);
+  p.beginShape();
+  p.vertex(-8 * s, 12 * s);
+  p.vertex(-14 * s, 26 * s);
+  p.vertex(0, 16 * s);
+  p.vertex(14 * s, 26 * s);
+  p.vertex(8 * s, 12 * s);
+  p.endShape(p.CLOSE);
+
+  // long, sleek body
+  p.fill(fr, fg, fb);
+  p.ellipse(0, -1 * s, 17 * s, 24 * s);
+
+  // dorsal fin ridge along the back
+  p.fill(fr * 0.8, fg * 0.8, fb * 0.8, 220);
+  p.triangle(-3 * s, -2 * s, 0, -9 * s, 4 * s, -1 * s);
+
+  // rounded head
+  p.fill(fr * 0.95, fg * 0.95, fb * 0.95);
+  p.ellipse(0, -11 * s, 13 * s, 12 * s);
+
+  // calico patches — koi are known for blotchy white/black markings
+  // layered over whatever base color the player picked
+  p.fill(255, 255, 255, 160);
+  p.ellipse(-3 * s, 3 * s, 8 * s, 6 * s);
+  p.fill(20, 20, 20, 130);
+  p.ellipse(4 * s, -6 * s, 6 * s, 5 * s);
+
+  // short barbels near the mouth
+  p.stroke(fr * 0.6, fg * 0.6, fb * 0.6);
+  p.strokeWeight(1 * s);
+  p.line(-3 * s, -6 * s, -5 * s, -2 * s);
+  p.line(3 * s, -6 * s, 5 * s, -2 * s);
+
+  // round eyes
+  p.noStroke();
+  p.fill(20, 15, 12);
+  p.circle(-4 * s, -13 * s, 2 * s);
+  p.circle(4 * s, -13 * s, 2 * s);
+  p.pop();
+}
+
+function drawSharkBody(p, s, fr, fg, fb, legSwing) {
+  const wobble = legSwing * 0.015;
+  p.push();
+  p.rotate(wobble);
+
+  // pectoral fins, swept back, + a tail fin instead of legs
+  p.noStroke();
+  p.fill(fr * 0.7, fg * 0.7, fb * 0.7);
+  p.triangle(-6 * s, 2 * s, -16 * s, 9 * s, -5 * s, 10 * s);
+  p.triangle(6 * s, 2 * s, 16 * s, 9 * s, 5 * s, 10 * s);
+  p.triangle(-2 * s, 13 * s, -3 * s, 25 * s, 3 * s, 16 * s);
+  p.triangle(2 * s, 13 * s, 8 * s, 21 * s, 3 * s, 16 * s);
+
+  // torpedo body tapering to a pointed snout
+  p.fill(fr, fg, fb);
+  p.beginShape();
+  p.vertex(0, -20 * s);
+  p.bezierVertex(9 * s, -16 * s, 10 * s, 4 * s, 5 * s, 13 * s);
+  p.vertex(-5 * s, 13 * s);
+  p.bezierVertex(-10 * s, 4 * s, -9 * s, -16 * s, 0, -20 * s);
+  p.endShape(p.CLOSE);
+
+  // pale underside
+  p.fill(fr * 1.3, fg * 1.3, fb * 1.3, 160);
+  p.ellipse(0, 6 * s, 8 * s, 12 * s);
+
+  // tall triangular dorsal fin — the signature shark silhouette
+  p.fill(fr * 0.85, fg * 0.85, fb * 0.85);
+  p.triangle(-3 * s, -2 * s, 1 * s, -15 * s, 5 * s, 0);
+
+  // gill slits
+  p.stroke(fr * 0.5, fg * 0.5, fb * 0.5);
+  p.strokeWeight(1 * s);
+  p.noFill();
+  for (let i = 0; i < 3; i++) {
+    const y = -8 * s + i * 2.5 * s;
+    p.arc(7 * s, y, 4 * s, 3 * s, Math.PI * 0.15, Math.PI * 0.75);
+  }
+
+  // small eyes
+  p.noStroke();
+  p.fill(20, 15, 12);
+  p.circle(-3 * s, -14 * s, 1.6 * s);
+  p.circle(3 * s, -14 * s, 1.6 * s);
   p.pop();
 }
 
