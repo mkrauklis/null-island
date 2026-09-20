@@ -35,7 +35,9 @@ function renderRank() {
   const el = document.getElementById('rank-badge');
   const rank = computeRank();
   const winWord = rank.wins === 1 ? 'win' : 'wins';
-  el.innerHTML = `Rank: <strong>${rank.title}</strong> (${rank.wins} ${winWord})` +
+  const [r, g, b] = rank.color;
+  el.style.borderColor = `rgb(${r},${g},${b})`;
+  el.innerHTML = `Rank: <strong style="color:rgb(${r},${g},${b})">${rank.title}</strong> (${rank.wins} ${winWord})` +
     (rank.next ? ` — ${rank.next.winsAway} more to ${rank.next.title}` : ' — max rank');
 }
 
