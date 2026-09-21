@@ -36,9 +36,9 @@ pass as everything else (`simulateGridMazeChase`). `octopusNear()` reads
 real state *as of that point in the simulated trace*, same as any other
 query function would. The only time this stops working is if a future
 world's obstacle depends on something the simulator doesn't control (real
-wall-clock time, true randomness) — not the case for anything built so far.
-Area 6's boss will need to be re-examined against this once designed, but
-the model itself no longer looks like the blocker it did.
+wall-clock time, true randomness) — not the case for anything built so far,
+including Area 6's rotating boss, whose tentacle angles are just another
+pure function of the tick number (`coreIsCellDangerous`).
 
 **Procedural, seeded levels:** every level is generated from
 `Progress.getSeed(worldId)` — a random seed picked once and stuck to a
@@ -373,46 +373,75 @@ exact search once N gets past a couple of points. `greedyVaultPar`
 each step, then to the goal, and reports its length honestly labeled as
 such in both the world-select par line and the in-level hint.
 
-### Area 6 — The Core — MVP built, full "everything combined" vision not yet
-**Teaches:** events/callbacks.
-What's actually built: a boss fight against a mutated octopus with five
-tentacles, each cycling through its own hidden/exposed pattern
-(`tentacleExposedAt`, same deterministic-per-tick trick as the scanner and
-squid). There's deliberately no query function for "is tentacle N exposed
-right now" — the only way to react in time is
-`onTentacleExposed(id, callback)`, registered *before* the fight starts,
-which the engine calls the instant that tentacle flips from hidden to
-exposed. `detonate(id)` only actually destroys the tentacle while it's
-exposed — calling it blind still works if you happen to land on the right
-tick, same "teaches by fit, not force" latitude every other world's
-mechanic gets. All five down is required before the exit counts (otherwise
-`'goal-incomplete'`, same honesty principle as Area 3/5); reaching it then
-plays the ending line about the helicopter waiting outside.
+### Area 6 — The Core — built
+**Teaches:** putting everything together — real maze movement, a timing
+hazard in the spirit of the Foundry's squid, and a multi-waypoint objective
+in the spirit of the Vault, all in one level.
 
-Implemented as a new engine-level simulate function, `simulateCore`
-(alongside the side-scroller, both grid-maze variants, and the vault) —
-still fits the simulate-then-replay contract, since everything here is a
-pure function of the tick number and the player's own code, registered
-callbacks included, so the whole fight resolves in one synchronous pass
-like every other world. The corridor itself is a short, unobstructed
-1-lane walk (no spatial puzzle) — the challenge is entirely in the timing,
-which is the one new thing this world teaches. **Not built yet:** the
-original "everything combined" framing (a real maze layout, tentacles tied
-to physical positions/buttons rather than a fixed HUD overlay) — same
-"MVP proves the core mechanic, fuller vision is a later pass" situation as
-Area 3.
+A medium generated maze (`generateMaze(7, 7, rng)`) with the boss camped in
+a carved-open chamber at the exact center — the center tile itself stays a
+permanent wall (the boss's own body; nothing can stand where it stands).
+Five tentacles are rigidly fanned around it, evenly spaced, and rotate
+*together* at a fixed rate — `coreIsCellDangerous` (engine.js) is the one
+shared definition both the simulator and the renderer use for "is this
+cell swept right now," a deterministic function of (cell, tick) in the
+same family as the scanner's position and the squid's watching state.
+Touching a swept cell ends the run whether the player moved there or just
+called `wait()` — unlike the squid, standing still is never automatically
+safe, since a rotating blade doesn't care whether you held still.
 
-**Par has a clean closed-form minimum, unlike every earlier world's
-BFS/greedy-constructed par.** This isn't a spatial search problem: a
-tentacle can only ever be destroyed at or after its own first exposure
-tick, and every action (wait or move) costs exactly one tick regardless, so
-there's no cheaper way to spend time than walking. The true minimum
-(`computeCorePar`, `world6.js`) is exactly the larger of the walk length
-and the last tentacle's first-exposure tick (plus one extra tick to
-actually step onto the exit, if the fight finishes after the walk would
-have). Verified by hand: constructing that exact optimal sequence (walk to
-one tile short of the exit, pad the remaining time with `wait()`, then take
-the final step) lands precisely on the computed par, not just under it.
+Five scanner stations are scattered through the maze (never inside the
+chamber, spaced apart, same placement heuristic as the Vault's switches).
+Reaching one auto-destroys its wired tentacle — same physicality as
+stepping on a switch, no separate "activate" action — and a dead tentacle
+simply stops being drawn and stops sweeping. The door back to the exit,
+just north of the chamber, is a **real wall tile** until every tentacle is
+gone: not a `'goal-incomplete'` message like the Vault, a physical barrier.
+`simulateCore`'s `isFloorNow` only treats that one cell as floor once
+`tentacleDestroyed` is all true, so reaching the exit early isn't just
+discouraged, it's impossible — trying just bounces off a locked door, with
+its own honest status line (how many tentacles are still active).
+
+**Why this doesn't need a live execution model.** Everything here — the
+tentacles' current angle, whether a given cell is swept, which scanner
+gets triggered — is a pure function of the tick number and the player's
+own already-decided moves, exactly like every earlier hazard in this game.
+The whole fight still resolves in one synchronous `simulateCore` pass
+(alongside the side-scroller, both grid-maze variants, and the vault),
+replayed afterward — no callbacks, no live polling, same contract as
+everything else.
+
+**Par comes from an actual solver (`solveCoreLevel`, `world6.js`), not a
+separate estimate.** Same nearest-unvisited-station-first TSP tradeoff as
+the Vault's `greedyVaultPar` (visiting order has no cheap exact search),
+but each leg is found by `findCoreLeg` — a state-space BFS over (row, col,
+tick mod rotation-period), the same "extend the state with the hazard's
+own period" trick `computeMinMovesGrid` already uses for the scanner and
+squid — so the route it reports is a real, dodging-included sequence of
+moves, proven achievable because it's literally how par was computed, not
+an under-count that ignores the fan. **This solver is also the level
+generator's acceptance test**, not just a par source: a layout is only
+kept if `solveCoreLevel` can actually route through every scanner to the
+exit; `generateLevel` retries with a new seed offset otherwise (same
+"generate, verify, regenerate" convention as every other world's maze).
+That check earned its keep — an earlier version reasoned abstractly that
+every cell must have *some* periodic safe window (blade width kept well
+under 72°, the gap between neighboring blades) and assumed that made any
+layout solvable, but building an actual solver surfaced two real
+generation bugs a purely theoretical argument had missed: an uncapped
+blade reach that made some corridors unthreadable regardless of timing,
+and (once fixed) individual layouts that were still fine in the abstract
+but had no route a real player could execute. Verifying by construction,
+not by argument, is what actually closed both gaps.
+
+**The ending.** Reaching the exit doesn't just flip a "won" flag — the
+level runs a short scripted animation (drawn entirely in `world6.js`, not
+a general engine feature) of the character climbing a ladder at the exit
+tile into a waiting helicopter, which lifts off and drifts away. The
+per-world clear/achievement bookkeeping (`Progress.recordClear`, etc.)
+still fires immediately and normally underneath it — the cutscene is a
+purely visual overlay layered on top of `runner.draw()` for a few seconds,
+not a special data path.
 
 ## The player character
 
@@ -542,18 +571,20 @@ no custom modal, consistent with how "Reset progress" already works.
 ## Enemy guide
 
 `enemies.html`, linked from Area Select. One card per hazard (Scanner,
-Octopus, Squid, and Area 6's tentacle boss), each with a small looping demo
-animation. Deliberately reuses the real rendering, not a redrawn copy: each
-card builds a tiny fake level (`{grid, start, goal, scanner/octopi/squid/
-tentacles}`) and a real `GridMazeRunner`, so `runner.draw()` calls the exact
-same `_drawScanner`/`_drawOctopus`/`_drawSquid`/`_drawOctopusBoss` the
-actual worlds use — this guide can never visually drift from what a world
+Octopus, Squid, and Area 6's rotating tentacle boss), each with a small
+looping demo animation. Deliberately reuses the real rendering, not a
+redrawn copy: each card builds a tiny fake level (`{grid, start, goal,
+scanner/octopi/squid/center+tentacles+scanners}`) and a real
+`GridMazeRunner`, so `runner.draw()` calls the exact same
+`_drawScanner`/`_drawOctopus`/`_drawSquid`/`_drawCoreBoss` the actual
+worlds use — this guide can never visually drift from what a world
 actually shows, since there's nothing to keep in sync by hand. The demo
 trace is just `wait()` repeated (player holds still, hazard still animates
 from `tick`), reloaded every time it finishes so it loops forever. The boss
-card uses a taller canvas (`canvasH`, per-card override in `mountEnemy`) —
-its tentacles reach further down than the other three hazards' fixed
-132px-tall demo fits.
+card uses a taller canvas and a smaller tile size (`canvasH`/`tile`,
+per-card overrides in `mountEnemy`) — its wedges sweep the whole demo room,
+not just a couple of grid tiles like the other three hazards' 132px-tall,
+40px-tile demos.
 
 ## Repo conventions
 

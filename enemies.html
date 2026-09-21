@@ -106,31 +106,32 @@ const ENEMIES = [
   },
   {
     title: 'The Core (boss)',
-    world: 'Area 6 — The Core (Events)',
-    description: 'Five tentacles, each with its own hidden/exposed cycle — grey and tucked in ' +
-      'means safe but unreachable, red and stretched out means armed. There’s no function that ' +
-      'tells you when one opens; the only way to react in time is onTentacleExposed(id, fn), ' +
-      'registered before it happens, so your handler fires the instant it does.',
+    world: 'Area 6 — The Core',
+    description: 'Five tentacles, evenly spaced, rotating together around the boss at a fixed rate. ' +
+      'Touching a swept tile ends the run whether you moved there or just wait()’d while it swept ' +
+      'through — standing still is never automatically safe. Reaching one of five scanners scattered ' +
+      'through the maze blows up a tentacle; all five gone opens the door out.',
     theme: 'core',
-    canvasH: 190,
+    canvasH: 220,
+    tile: 28,
     buildLevel() {
+      const size = 7;
+      const grid = Array.from({ length: size }, () => new Array(size).fill('floor'));
+      const center = { row: 3, col: 3 };
+      grid[center.row][center.col] = 'wall';
+      const start = { row: 5, col: 1 };
       return {
-        grid: [new Array(3).fill('wall'), new Array(3).fill('floor')],
-        start: { row: 1, col: 1 },
-        goal: { row: 1, col: 1 },
-        tentacles: [0, 1, 2, 3, 4].map((id) => {
-          const hiddenLen = 2 + id * 5;
-          const exposedLen = 3;
-          const cooldown = 4;
-          const pattern = new Array(hiddenLen + exposedLen + cooldown).fill(false);
-          for (let k = hiddenLen; k < hiddenLen + exposedLen; k++) pattern[k] = true;
-          return { id, pattern };
-        }),
+        grid,
+        start,
+        goal: start,
+        center,
+        tentacles: [0, 1, 2, 3, 4].map((i) => ({ baseAngle: (i / 5) * Math.PI * 2 })),
+        scanners: [{ id: 0, tentacleId: 0, row: 1, col: 5 }],
       };
     },
     buildTrace(level) {
-      const trace = [{ row: 1, col: 1, event: 'start', tick: 0 }];
-      for (let i = 1; i <= 40; i++) trace.push({ row: 1, col: 1, event: 'move', action: 'wait', tick: i });
+      const trace = [{ row: level.start.row, col: level.start.col, event: 'start', tick: 0 }];
+      for (let i = 1; i <= 70; i++) trace.push({ row: level.start.row, col: level.start.col, event: 'move', action: 'wait', tick: i });
       return trace;
     },
   },
@@ -153,12 +154,13 @@ function mountEnemy(enemy) {
   let lastFrameMs;
 
   const canvasH = enemy.canvasH || 132;
+  const tile = enemy.tile || 40;
 
   new p5((p) => {
     p.setup = () => {
       const canvas = p.createCanvas(220, canvasH);
       canvas.parent(`canvas-${enemy.title}`);
-      runner = new GridMazeRunner(p, level, { tile: 40, viewportW: 220, viewportH: canvasH, theme: enemy.theme });
+      runner = new GridMazeRunner(p, level, { tile, viewportW: 220, viewportH: canvasH, theme: enemy.theme });
       runner.loadTrace(trace, true, null);
       lastFrameMs = performance.now();
     };

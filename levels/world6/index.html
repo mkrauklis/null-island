@@ -15,10 +15,11 @@
 <body>
 <header class="hero" style="padding:2rem 1.5rem 1rem;">
   <h1 style="font-size:1.8rem;">Area 6 — The Core</h1>
-  <p>The source of the island's corruption: a mutated thing with five
-  tentacles, each one strapped with a bomb. You can't watch all five at
-  once — you have to tell the terminal what to do the instant each one
-  opens up, then get out of the way and let it happen.</p>
+  <p>The source of the island's corruption sits at the center of this maze:
+  a mutated thing with five tentacles, slowly swinging around it like a
+  fan. Touch one and you're gone. Five scanners are scattered through the
+  maze — reach one and it blows up a tentacle. Clear all five and the door
+  north of the boss opens.</p>
 </header>
 <div class="wrap">
   <p style="text-align:center;"><a href="../../worlds.html">&larr; back to Area Select</a></p>
@@ -40,25 +41,23 @@
     </div>
     <div class="panel editor-panel">
       <h2>Your code</h2>
-      <textarea id="code">// There's no function that tells you when a tentacle is exposed — the
-// only way to react in time is to register a handler BEFORE it happens:
+      <textarea id="code">// The tentacles rotate together on a fixed cycle, all five always the
+// same distance apart. Touching a swept tile ends the run whether you
+// moved there or just wait()'d while it swept through — standing still
+// is never automatically safe here.
 //
-// onTentacleExposed(0, () => {
-//   detonate(0);
-// });
-//
-// Register one for every tentacle (0-4), THEN let time pass with wait()
-// or a loop of wait() calls — your handlers fire on their own the
-// instant each tentacle opens up. detonate() only works while its
-// tentacle is actually exposed.
-wait();
+// Reach any of the 5 scanners to blow up a tentacle. Once all five are
+// gone, the door just north of the boss opens.
+moveRight();
 </textarea>
       <div class="hint" id="level-hint"></div>
       <div class="hint">
-        Register a handler for every tentacle first, then run out the
-        clock with <code>wait()</code> (a loop makes this short) until
-        every bomb has gone off. Only once all five are destroyed does
-        walking to the end actually count.
+        There's no function that tells you where a tentacle is right now —
+        you have to reason about the rotation from what you can see and
+        time your route around it, the same way you'd time a move around
+        the Foundry's squid. The maze is real, so <code>moveUp</code>/
+        <code>moveDown</code>/<code>moveLeft</code>/<code>moveRight</code>
+        all matter again.
       </div>
       <div class="command-palette">
         <h3>Commands</h3>

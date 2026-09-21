@@ -1459,15 +1459,50 @@ function squidWatchAt(squid, tick) {
   return squid.pattern[tick % squid.pattern.length];
 }
 
-// A tentacle's "exposed" state is the same trick as the squid's watching
-// state and the scanner's position — a deterministic function of the tick
-// number, repeating on its own cycle. World 6's twist is that the player
-// never queries this directly; the only way to act on it is to have
-// registered a callback beforehand (see simulateCore) — that's the whole
-// point of the level.
-function tentacleExposedAt(tentacle, tick) {
-  if (!tentacle) return false;
-  return tentacle.pattern[tick % tentacle.pattern.length];
+// World 6's boss: five tentacles rigidly fanned around a central pivot,
+// rotating together at a fixed rate — same "deterministic function of the
+// tick number" trick as the scanner/squid, just expressed as an angle
+// instead of a position or a boolean. Whether a given cell is currently
+// swept is a pure function of (cell, tick), so — like every other hazard
+// in this game — the whole fight still resolves in one synchronous
+// simulate pass, no live execution needed.
+const CORE_ROTATION_SPEED = Math.PI / 18; // radians per tick (10°) — "slowly swinging"
+const CORE_HALF_WIDTH = Math.PI / 15; // radians (12°) — each blade is ~24° wide
+// A tentacle is a physical appendage, not an infinite death-ray — it only
+// reaches this many tiles from the boss's own center. Without a cap, a
+// 24°-wide blade sweeps an arc many tiles across way out at the maze's
+// edges, which turned out to make ordinary corridors far from the boss
+// entirely un-threadable (verified empirically: generation kept failing
+// every attempt). Capping the reach keeps the danger concentrated near
+// the chamber, where it's meant to be, and leaves the rest of the maze —
+// including the start — genuinely safe to walk.
+const CORE_REACH = 6; // tiles
+
+function coreAngleDiff(a, b) {
+  let d = a - b;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return d;
+}
+function coreCellAngle(center, row, col) {
+  return Math.atan2(row - center.row, col - center.col);
+}
+function coreCellRadius(center, row, col) {
+  return Math.hypot(row - center.row, col - center.col);
+}
+function coreTentacleAngleAt(tentacle, tick) {
+  return tentacle.baseAngle + tick * CORE_ROTATION_SPEED;
+}
+// destroyed[i] is a plain boolean array (which of the five tentacles have
+// already been exploded by their matching scanner) — a dead tentacle no
+// longer sweeps, which is the whole payoff of reaching a scanner.
+function coreIsCellDangerous(level, destroyed, row, col, tick) {
+  if (coreCellRadius(level.center, row, col) > CORE_REACH) return false;
+  const ang = coreCellAngle(level.center, row, col);
+  return level.tentacles.some((t, i) => {
+    if (destroyed[i]) return false;
+    return Math.abs(coreAngleDiff(ang, coreTentacleAngleAt(t, tick))) <= CORE_HALF_WIDTH;
+  });
 }
 
 // Runs `userCode` against a grid level and returns a trace of every tick.
@@ -1885,73 +1920,54 @@ function simulateVault(levelConfig, userCode) {
   return { trace, success: state.won, error, phaseEvents };
 }
 
-// World 6 — the boss. Five tentacles, each on its own repeating
-// hidden/exposed cycle (tentacleExposedAt, same deterministic-per-tick
-// trick as the scanner/squid). There is deliberately no query function for
-// "is tentacle N exposed right now" — the only way to act on that moment is
-// to have called onTentacleExposed(id, callback) *before* it happens, and
-// let the engine call that callback for you the instant the tentacle's
-// state flips from hidden to exposed. That's the whole teaching point: this
-// is the first world where the player's code doesn't decide *when*
-// something runs, just what happens when it does. detonate(id) only
-// actually destroys the tentacle if called while it's exposed — calling it
-// blind (no registered handler, guessing a tick number) can still work if
-// you get the timing right by luck or careful counting, same "teaches by
-// fit, not force" latitude every other world's mechanic gets.
-//
-// Still fits the simulate-then-replay contract: everything here is a pure
-// function of the tick number and the player's own code, so the whole
-// fight can be resolved in one synchronous pass exactly like every other
-// world, including nested loops/conditionals inside a registered callback.
+// World 6 — the boss. A real maze with the boss camped in a chamber at its
+// center, five tentacles rigidly fanned out and rotating together
+// (coreIsCellDangerous, engine-level so both the simulator and the
+// renderer share one definition of "dangerous right now"). Touching a
+// swept cell — on a move OR a wait(), a rotating blade doesn't care
+// whether you held still — ends the run, same immediate-death contract as
+// the scanner/octopus. Five scanner stations are scattered through the
+// maze, each wired to one tentacle; stepping onto one destroys its
+// tentacle automatically (same physicality as the Vault's switches — no
+// separate "activate" action). The door back to the exit is a real wall
+// tile until every tentacle is gone, so — unlike every earlier world's
+// 'goal-incomplete' — reaching the exit early isn't just discouraged, it's
+// physically impossible: `isFloorNow` only opens that one tile once
+// `tentacleDestroyed` is all true.
 function simulateCore(levelConfig, userCode) {
-  const { grid, start, goal, tentacles } = levelConfig;
+  const { grid, start, exit, doorPos, scanners } = levelConfig;
   const rows = grid.length;
   const cols = grid[0].length;
   const state = {
     row: start.row,
     col: start.col,
-    tentacles: tentacles.map((t) => ({ id: t.id, destroyed: false, prevExposed: false })),
-    handlers: {},
-    firingId: null,
-    currentTick: 0,
-    allViaCallback: true,
+    tentacleDestroyed: levelConfig.tentacles.map(() => false),
     finished: false,
     won: false,
   };
-  const snapshot = () => state.tentacles.map((t) => t.destroyed);
-  const trace = [{ row: state.row, col: state.col, tentaclesDestroyed: snapshot(), event: 'start', tick: 0 }];
+  const snapshot = () => state.tentacleDestroyed.slice();
+  const trace = [{ row: state.row, col: state.col, tentacleDestroyed: snapshot(), event: 'start', tick: 0 }];
   const phaseEvents = [];
   let error = null;
   let steps = 0;
   let markCount = 0;
 
-  function isFloor(r, c) {
+  function isFloorStatic(r, c) {
     return r >= 0 && r < rows && c >= 0 && c < cols && grid[r][c] !== 'wall';
+  }
+  function isFloorNow(r, c) {
+    if (doorPos && r === doorPos.row && c === doorPos.col) {
+      return state.tentacleDestroyed.every(Boolean);
+    }
+    return isFloorStatic(r, c);
   }
   function guard() {
     steps++;
     if (steps > MAX_STEPS) throw new Error('Too many moves — check for an infinite loop.');
   }
-
-  // Fires any tentacle whose exposure just flipped on this tick, letting a
-  // registered handler run synchronously — same "the callback runs the
-  // instant the event happens" contract as a real event listener, just
-  // resolved at simulate time since it's still a pure function of the tick.
-  function checkTentacles(tick) {
-    state.currentTick = tick;
-    tentacles.forEach((def, i) => {
-      const s = state.tentacles[i];
-      if (s.destroyed) return;
-      const exposed = tentacleExposedAt(def, tick);
-      if (exposed && !s.prevExposed) {
-        const handler = state.handlers[def.id];
-        if (handler) {
-          state.firingId = def.id;
-          try { handler(); } finally { state.firingId = null; }
-        }
-      }
-      s.prevExposed = exposed;
-    });
+  function activateScannerHere() {
+    const s = scanners.find((sc) => sc.row === state.row && sc.col === state.col);
+    if (s) state.tentacleDestroyed[s.tentacleId] = true;
   }
 
   function step(newRow, newCol, action) {
@@ -1959,41 +1975,36 @@ function simulateCore(levelConfig, userCode) {
     if (state.finished) return;
     const tick = trace.length;
     const line = getCallerLine();
-    if (!isFloor(newRow, newCol)) {
+    if (!isFloorNow(newRow, newCol)) {
       state.finished = true;
-      trace.push({ row: newRow, col: newCol, tentaclesDestroyed: snapshot(), event: 'blocked', action, tick, line });
+      trace.push({ row: newRow, col: newCol, tentacleDestroyed: snapshot(), event: 'blocked', action, tick, line });
       return;
     }
-    checkTentacles(tick);
+    if (coreIsCellDangerous(levelConfig, state.tentacleDestroyed, newRow, newCol, tick)) {
+      state.finished = true;
+      state.row = newRow;
+      state.col = newCol;
+      trace.push({ row: newRow, col: newCol, tentacleDestroyed: snapshot(), event: 'caught', action, tick, line });
+      return;
+    }
     state.row = newRow;
     state.col = newCol;
-    const atGoal = newRow === goal.row && newCol === goal.col;
-    if (atGoal) {
+    activateScannerHere();
+    if (newRow === exit.row && newCol === exit.col) {
       state.finished = true;
-      const allDestroyed = state.tentacles.every((t) => t.destroyed);
-      if (allDestroyed) state.won = true;
-      trace.push({ row: newRow, col: newCol, tentaclesDestroyed: snapshot(), event: allDestroyed ? 'goal' : 'goal-incomplete', action, tick, line });
+      state.won = true;
+      trace.push({ row: newRow, col: newCol, tentacleDestroyed: snapshot(), event: 'goal', action, tick, line });
       return;
     }
-    trace.push({ row: newRow, col: newCol, tentaclesDestroyed: snapshot(), event: 'move', action, tick, line });
+    trace.push({ row: newRow, col: newCol, tentacleDestroyed: snapshot(), event: 'move', action, tick, line });
   }
 
   const api = {
     moveRight: () => step(state.row, state.col + 1, 'moveRight'),
     moveLeft: () => step(state.row, state.col - 1, 'moveLeft'),
+    moveUp: () => step(state.row - 1, state.col, 'moveUp'),
+    moveDown: () => step(state.row + 1, state.col, 'moveDown'),
     wait: () => step(state.row, state.col, 'wait'),
-    onTentacleExposed: (id, callback) => {
-      if (typeof callback === 'function') state.handlers[id] = callback;
-    },
-    detonate: (id) => {
-      const i = tentacles.findIndex((t) => t.id === id);
-      if (i === -1) return;
-      const s = state.tentacles[i];
-      if (s.destroyed) return;
-      if (!tentacleExposedAt(tentacles[i], state.currentTick)) return;
-      s.destroyed = true;
-      if (state.firingId !== id) state.allViaCallback = false;
-    },
     __mark: (line) => {
       markCount++;
       if (markCount > 3000) throw new Error('Loop is running too long — check your loop condition.');
@@ -2003,13 +2014,13 @@ function simulateCore(levelConfig, userCode) {
 
   try {
     const instrumented = instrumentForLoops(userCode);
-    const fn = new Function('moveRight', 'moveLeft', 'wait', 'onTentacleExposed', 'detonate', '__mark', instrumented !== null ? instrumented : userCode);
-    fn(api.moveRight, api.moveLeft, api.wait, api.onTentacleExposed, api.detonate, api.__mark);
+    const fn = new Function('moveRight', 'moveLeft', 'moveUp', 'moveDown', 'wait', '__mark', instrumented !== null ? instrumented : userCode);
+    fn(api.moveRight, api.moveLeft, api.moveUp, api.moveDown, api.wait, api.__mark);
   } catch (e) {
     error = e.message;
   }
 
-  return { trace, success: state.won, error, phaseEvents, allViaCallback: state.allViaCallback };
+  return { trace, success: state.won, error, phaseEvents };
 }
 
 // Exhaustive joint BFS over every octopus's position is exponential in the
@@ -2189,16 +2200,20 @@ class GridMazeRunner {
     p.translate(-Math.round(this.cameraX), -Math.round(this.cameraY));
     this._drawGrid();
     this._drawSwitches();
+    this._drawCoreDoor();
     this._drawScanner();
     this._drawOctopus();
+    this._drawCoreScanners();
+    this._drawCoreBoss();
     this._drawPlayer();
     this._drawDarkness();
     p.pop();
-    // The squid and the boss are both fixed HUD overseers, not part of the
-    // level — drawn after the pop so they never scroll with the camera and
-    // stay visible even through the darkness mask above.
+    // The squid is a fixed HUD overseer, not part of the level — drawn
+    // after the pop so it never scrolls with the camera and stays visible
+    // even through the darkness mask above. World 6's boss, by contrast,
+    // physically sits at a spot in its maze (level.center), so it's drawn
+    // above in camera space with everything else, not here.
     this._drawSquid();
-    this._drawOctopusBoss();
   }
 
   // Dungeon theme: torches (plus a small radius around the player, for
@@ -2669,93 +2684,126 @@ class GridMazeRunner {
     p.pop();
   }
 
-  // World 6's boss: a fixed HUD overseer above the play area, same
-  // placement rule as the squid (never scrolls with the camera). Five
-  // tentacles hang from a central head, one per horizontal slot across the
-  // viewport, each ending in a strapped bomb. A tentacle stays short and
-  // dim while hidden, stretches down and glows while exposed (the moment
-  // detonate(id) can actually do anything), and goes limp and grey once
-  // destroyed — reading the boss at a glance should tell you exactly which
-  // ones are live right now, same honesty principle as every other hazard.
-  _drawOctopusBoss() {
-    const tentacles = this.level.tentacles;
+  // World 6's boss: sits at level.center, inside its maze (not a fixed HUD
+  // like the squid — it physically occupies a spot the camera scrolls
+  // past). Each live tentacle is drawn as a wide wedge from the center out
+  // past the far edge of the maze, at exactly the angle coreIsCellDangerous
+  // uses to decide what can kill you right now — what you see IS the
+  // hitbox, nothing hidden. A destroyed tentacle simply isn't drawn.
+  _drawCoreBoss() {
+    const level = this.level;
+    const tentacles = level.tentacles;
     if (!tentacles) return;
     const p = this.p;
     const entry = this.trace[Math.min(this.stepIndex + 1, this.trace.length - 1)];
-    const destroyed = entry.tentaclesDestroyed || tentacles.map(() => false);
+    const destroyed = entry.tentacleDestroyed || tentacles.map(() => false);
+    const cx = level.center.col * this.tile + this.tile / 2;
+    const cy = level.center.row * this.tile + this.tile / 2;
+    const reach = CORE_REACH * this.tile;
     const t = p.millis() * 0.001;
-    const n = tentacles.length;
-    // Spread the tentacles across the corridor's own width, not the full
-    // viewport — a short corridor (camera pins to x=0 whenever it's
-    // narrower than the viewport, same clamp as everywhere else) otherwise
-    // leaves the outer slots dangling in empty background past the goal.
-    const spanW = Math.min(this.levelWidthPx(), this.viewportW);
-    const headX = spanW / 2;
-    const headY = 30;
-    const margin = 36;
-    const spacing = n > 1 ? (spanW - margin * 2) / (n - 1) : 0;
-
-    p.noStroke();
-    const pulse = 0.5 + 0.5 * Math.sin(t * 1.5);
-    p.fill(150, 20, 70, 30 + pulse * 15);
-    p.circle(headX, headY, 90 + pulse * 8);
 
     tentacles.forEach((def, i) => {
-      const exposed = tentacleExposedAt(def, entry.tick);
-      const isDead = destroyed[i];
-      const slotX = n > 1 ? margin + i * spacing : headX;
-      const restY = headY + 22;
-      const targetY = isDead ? restY + 14 : exposed ? restY + 108 : restY + 30;
-      const wobble = isDead ? 0 : Math.sin(t * 3 + i * 1.3) * (exposed ? 5 : 3);
-      const tipX = slotX + wobble * 0.6;
-
-      p.noFill();
-      p.stroke(isDead ? p.color(70, 60, 65, 150) : exposed ? p.color(255, 90, 60, 230) : p.color(150, 40, 80, 200));
-      p.strokeWeight(exposed ? 5 : 4);
-      p.beginShape();
-      p.curveVertex(headX, restY);
-      p.curveVertex(headX, restY);
-      p.curveVertex(lerp(headX, slotX, 0.5) + wobble, lerp(restY, targetY, 0.55));
-      p.curveVertex(tipX, targetY);
-      p.curveVertex(tipX, targetY);
-      p.endShape();
-
+      if (destroyed[i]) return;
+      const angle = coreTentacleAngleAt(def, entry.tick);
+      const a0 = angle - CORE_HALF_WIDTH;
+      const a1 = angle + CORE_HALF_WIDTH;
+      const pulse = 0.5 + 0.5 * Math.sin(t * 5 + i);
       p.noStroke();
-      if (isDead) {
-        p.fill(60, 55, 58);
-        p.circle(tipX, targetY, 12);
-        p.stroke(30, 28, 30);
-        p.strokeWeight(2);
-        p.line(tipX - 4, targetY - 4, tipX + 4, targetY + 4);
-        p.line(tipX - 4, targetY + 4, tipX + 4, targetY - 4);
-        p.noStroke();
-      } else if (exposed) {
-        const glow = 0.6 + 0.4 * Math.sin(t * 10 + i);
-        p.fill(255, 90, 40, 70 * glow);
-        p.circle(tipX, targetY, 22 + glow * 6);
-        p.fill(40, 34, 34);
-        p.circle(tipX, targetY, 13);
-        p.fill(255, 120, 50);
-        p.circle(tipX, targetY, 6);
-      } else {
-        p.fill(50, 40, 44);
-        p.circle(tipX, targetY, 10);
-        p.fill(90, 30, 40);
-        p.circle(tipX, targetY, 4);
-      }
+      p.fill(220, 40, 60, 55 + pulse * 30);
+      p.beginShape();
+      p.vertex(cx, cy);
+      p.vertex(cx + Math.cos(a0) * reach, cy + Math.sin(a0) * reach);
+      p.vertex(cx + Math.cos(angle) * reach, cy + Math.sin(angle) * reach);
+      p.vertex(cx + Math.cos(a1) * reach, cy + Math.sin(a1) * reach);
+      p.endShape(p.CLOSE);
+      p.stroke(255, 120, 140, 150 + pulse * 60);
+      p.strokeWeight(2);
+      p.line(cx, cy, cx + Math.cos(a0) * reach, cy + Math.sin(a0) * reach);
+      p.line(cx, cy, cx + Math.cos(a1) * reach, cy + Math.sin(a1) * reach);
     });
 
+    // the boss's own body, squatting on its permanently-walled center tile
     p.noStroke();
+    const bodyPulse = 0.5 + 0.5 * Math.sin(t * 1.5);
+    p.fill(150, 20, 70, 60 + bodyPulse * 20);
+    p.circle(cx, cy, this.tile * 1.6 + bodyPulse * 6);
     p.fill(90, 22, 48);
-    p.ellipse(headX, headY, 70, 46);
+    p.ellipse(cx, cy, this.tile * 1.1, this.tile * 0.85);
     p.fill(60, 14, 32);
-    p.ellipse(headX, headY + 6, 50, 26);
+    p.ellipse(cx, cy + this.tile * 0.1, this.tile * 0.8, this.tile * 0.5);
     const allDead = destroyed.length > 0 && destroyed.every(Boolean);
     p.fill(allDead ? p.color(120, 200, 160) : p.color(255, 60, 60));
-    p.circle(headX - 14, headY - 4, 10);
-    p.circle(headX + 14, headY - 4, 10);
+    p.circle(cx - this.tile * 0.22, cy - this.tile * 0.08, this.tile * 0.16);
+    p.circle(cx + this.tile * 0.22, cy - this.tile * 0.08, this.tile * 0.16);
     p.fill(10, 5, 8);
-    p.circle(headX - 14, headY - 4, 4);
-    p.circle(headX + 14, headY - 4, 4);
+    p.circle(cx - this.tile * 0.22, cy - this.tile * 0.08, this.tile * 0.07);
+    p.circle(cx + this.tile * 0.22, cy - this.tile * 0.08, this.tile * 0.07);
+  }
+
+  // Five wall-mounted consoles, one per tentacle. Grey and inert once its
+  // tentacle is gone, otherwise a pulsing red waiting for the player to
+  // physically reach it — stepping onto one auto-activates it (see
+  // simulateCore's activateScannerHere), same physicality as the Vault's
+  // switches.
+  _drawCoreScanners() {
+    const scanners = this.level.scanners;
+    if (!scanners) return;
+    const p = this.p;
+    const entry = this.trace[Math.min(this.stepIndex + 1, this.trace.length - 1)];
+    const destroyed = entry.tentacleDestroyed || [];
+    const t = p.millis() * 0.001;
+    scanners.forEach((s) => {
+      const done = destroyed[s.tentacleId];
+      const x = s.col * this.tile + this.tile / 2;
+      const y = s.row * this.tile + this.tile / 2;
+      p.push();
+      p.translate(x, y);
+      p.noStroke();
+      p.fill(20, 22, 28);
+      p.rect(-this.tile * 0.26, -this.tile * 0.2, this.tile * 0.52, this.tile * 0.4, 4);
+      if (done) {
+        p.fill(90, 100, 110);
+        p.circle(0, 0, this.tile * 0.22);
+      } else {
+        const pulse = 0.5 + 0.5 * Math.sin(t * 5);
+        p.fill(230, 60, 60, 120 + pulse * 100);
+        p.circle(0, 0, this.tile * 0.2 + pulse * 4);
+        p.fill(230, 60, 60);
+        p.circle(0, 0, this.tile * 0.12);
+      }
+      p.pop();
+    });
+  }
+
+  // The door tile is a real wall in level.grid until every tentacle is
+  // gone (isFloorNow in simulateCore) — this renders that same state
+  // honestly: barred red while locked, an open glowing arch once the
+  // trace shows every tentacle destroyed.
+  _drawCoreDoor() {
+    const doorPos = this.level.doorPos;
+    if (!doorPos) return;
+    const p = this.p;
+    const entry = this.trace[Math.min(this.stepIndex + 1, this.trace.length - 1)];
+    const destroyed = entry.tentacleDestroyed || [];
+    const open = destroyed.length > 0 && destroyed.every(Boolean);
+    const x = doorPos.col * this.tile;
+    const y = doorPos.row * this.tile;
+    p.noStroke();
+    if (open) {
+      const pulse = 0.5 + 0.5 * Math.sin(p.millis() * 0.003);
+      p.fill(40, 60, 50);
+      p.rect(x + 1, y + 1, this.tile - 2, this.tile - 2, 3);
+      p.fill(70, 230, 140, 90 + pulse * 60);
+      p.circle(x + this.tile / 2, y + this.tile / 2, this.tile * 0.5 + pulse * 4);
+    } else {
+      p.fill(50, 16, 20);
+      p.rect(x + 1, y + 1, this.tile - 2, this.tile - 2, 3);
+      p.stroke(200, 40, 50, 200);
+      p.strokeWeight(2);
+      for (let i = 1; i < 4; i++) {
+        const lx = x + (this.tile / 4) * i;
+        p.line(lx, y + 2, lx, y + this.tile - 2);
+      }
+    }
   }
 }

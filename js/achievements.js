@@ -9,7 +9,7 @@ const ACHIEVEMENTS = [
   { id: 'decider', title: 'Decision Maker', icon: '\u{1F914}', description: 'Use an if statement to clear a level.' },
   { id: 'reuser', title: 'Reusable Parts', icon: '\u{1F527}', description: 'Define a function and call it more than once to clear a level.' },
   { id: 'lister', title: 'List Handler', icon: '\u{1F4CB}', description: 'Loop over switches() to clear a level.' },
-  { id: 'eventHandler', title: 'Event Handler', icon: '\u{1F514}', description: 'Destroy every tentacle by reacting to onTentacleExposed, not by guessing tick counts.' },
+  { id: 'fearless', title: 'Never Flinched', icon: '\u{1F3C3}', description: 'Clear The Core without ever calling wait() — timed every step past the tentacles perfectly.' },
   { id: 'backtracker', title: 'Second Thoughts', icon: '\u{21A9}\u{FE0F}', description: 'Move backward and still reach the goal.' },
   { id: 'perfectionist', title: 'Perfectionist', icon: '\u{2B50}', description: 'Clear a level in par — the fewest possible moves.' },
   { id: 'escapee', title: 'Island Escapee', icon: '\u{1F3DD}\u{FE0F}', description: 'Clear every area currently on the island.' },
