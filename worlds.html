@@ -126,6 +126,17 @@ function renderRankBoard() {
   });
 }
 
+// Rank-based achievement, checked on every load — Progress.unlockAchievement
+// is itself idempotent (isNew is only true the first time), so there's no
+// need to track "did we already announce this" separately.
+function checkRankAchievements() {
+  const rank = computeRank();
+  if (rank.title === 'Malware') {
+    const { isNew } = Progress.unlockAchievement('malware');
+    if (isNew) renderAchievements();
+  }
+}
+
 function renderAchievements() {
   const earned = Progress.getAchievements();
   const gridEl = document.getElementById('achievement-grid');
@@ -157,6 +168,7 @@ renderGrid();
 renderAchievements();
 renderRank();
 renderRankBoard();
+checkRankAchievements();
 </script>
 </body>
 </html>
