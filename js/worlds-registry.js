@@ -48,8 +48,8 @@ const WORLDS = [
     id: 'world6',
     title: 'The Core',
     concept: 'Events',
-    path: null,
-    built: false,
-    parMoves: null,
+    path: 'levels/world6/index.html',
+    built: true,
+    parMoves: 22,
   },
 ];

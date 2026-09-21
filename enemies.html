@@ -104,6 +104,36 @@ const ENEMIES = [
       return trace;
     },
   },
+  {
+    title: 'The Core (boss)',
+    world: 'Area 6 — The Core (Events)',
+    description: 'Five tentacles, each with its own hidden/exposed cycle — grey and tucked in ' +
+      'means safe but unreachable, red and stretched out means armed. There’s no function that ' +
+      'tells you when one opens; the only way to react in time is onTentacleExposed(id, fn), ' +
+      'registered before it happens, so your handler fires the instant it does.',
+    theme: 'core',
+    canvasH: 190,
+    buildLevel() {
+      return {
+        grid: [new Array(3).fill('wall'), new Array(3).fill('floor')],
+        start: { row: 1, col: 1 },
+        goal: { row: 1, col: 1 },
+        tentacles: [0, 1, 2, 3, 4].map((id) => {
+          const hiddenLen = 2 + id * 5;
+          const exposedLen = 3;
+          const cooldown = 4;
+          const pattern = new Array(hiddenLen + exposedLen + cooldown).fill(false);
+          for (let k = hiddenLen; k < hiddenLen + exposedLen; k++) pattern[k] = true;
+          return { id, pattern };
+        }),
+      };
+    },
+    buildTrace(level) {
+      const trace = [{ row: 1, col: 1, event: 'start', tick: 0 }];
+      for (let i = 1; i <= 40; i++) trace.push({ row: 1, col: 1, event: 'move', action: 'wait', tick: i });
+      return trace;
+    },
+  },
 ];
 
 function mountEnemy(enemy) {
@@ -122,11 +152,13 @@ function mountEnemy(enemy) {
   let runner;
   let lastFrameMs;
 
+  const canvasH = enemy.canvasH || 132;
+
   new p5((p) => {
     p.setup = () => {
-      const canvas = p.createCanvas(220, 132);
+      const canvas = p.createCanvas(220, canvasH);
       canvas.parent(`canvas-${enemy.title}`);
-      runner = new GridMazeRunner(p, level, { tile: 40, viewportW: 220, viewportH: 132, theme: enemy.theme });
+      runner = new GridMazeRunner(p, level, { tile: 40, viewportW: 220, viewportH: canvasH, theme: enemy.theme });
       runner.loadTrace(trace, true, null);
       lastFrameMs = performance.now();
     };

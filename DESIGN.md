@@ -373,15 +373,46 @@ exact search once N gets past a couple of points. `greedyVaultPar`
 each step, then to the goal, and reports its length honestly labeled as
 such in both the world-select par line and the in-level hint.
 
-### Area 6 — The Core (boss, everything combined) — not built
+### Area 6 — The Core — MVP built, full "everything combined" vision not yet
 **Teaches:** events/callbacks.
-The source of the island's corruption: a **mutated octopus**, five tentacles,
-each with a bomb strapped to it. The player must register handlers/trigger
-logic to hit **5 buttons**, one per tentacle, blowing each tentacle in turn —
-ideally each button only works while its tentacle is exposed/vulnerable, so
-the player is reacting to an event (`onTentacleExposed(id, () => detonate(id))`)
-rather than running a fixed script. All five down opens the hall to the
-finish, where a **helicopter is waiting outside** — the ending.
+What's actually built: a boss fight against a mutated octopus with five
+tentacles, each cycling through its own hidden/exposed pattern
+(`tentacleExposedAt`, same deterministic-per-tick trick as the scanner and
+squid). There's deliberately no query function for "is tentacle N exposed
+right now" — the only way to react in time is
+`onTentacleExposed(id, callback)`, registered *before* the fight starts,
+which the engine calls the instant that tentacle flips from hidden to
+exposed. `detonate(id)` only actually destroys the tentacle while it's
+exposed — calling it blind still works if you happen to land on the right
+tick, same "teaches by fit, not force" latitude every other world's
+mechanic gets. All five down is required before the exit counts (otherwise
+`'goal-incomplete'`, same honesty principle as Area 3/5); reaching it then
+plays the ending line about the helicopter waiting outside.
+
+Implemented as a new engine-level simulate function, `simulateCore`
+(alongside the side-scroller, both grid-maze variants, and the vault) —
+still fits the simulate-then-replay contract, since everything here is a
+pure function of the tick number and the player's own code, registered
+callbacks included, so the whole fight resolves in one synchronous pass
+like every other world. The corridor itself is a short, unobstructed
+1-lane walk (no spatial puzzle) — the challenge is entirely in the timing,
+which is the one new thing this world teaches. **Not built yet:** the
+original "everything combined" framing (a real maze layout, tentacles tied
+to physical positions/buttons rather than a fixed HUD overlay) — same
+"MVP proves the core mechanic, fuller vision is a later pass" situation as
+Area 3.
+
+**Par has a clean closed-form minimum, unlike every earlier world's
+BFS/greedy-constructed par.** This isn't a spatial search problem: a
+tentacle can only ever be destroyed at or after its own first exposure
+tick, and every action (wait or move) costs exactly one tick regardless, so
+there's no cheaper way to spend time than walking. The true minimum
+(`computeCorePar`, `world6.js`) is exactly the larger of the walk length
+and the last tentacle's first-exposure tick (plus one extra tick to
+actually step onto the exit, if the fight finishes after the walk would
+have). Verified by hand: constructing that exact optimal sequence (walk to
+one tile short of the exit, pad the remaining time with `wait()`, then take
+the final step) lands precisely on the computed par, not just under it.
 
 ## The player character
 
@@ -413,9 +444,8 @@ a single draw pass.
 
 ## Wins, rank, and the re-lock loop
 
-A **win** means every world (all 6 — currently a no-op until Area 6 ships,
-since it can never be true with only 3 built) is cleared at once.
-`Progress.checkForWin(WORLDS)`, called after every clear from each world's
+A **win** means every world (all 6, now that Area 6 is built) is cleared at
+once. `Progress.checkForWin(WORLDS)`, called after every clear from each world's
 own script, checks that; when it's true it increments a stored win count
 and wipes `PROGRESS_KEY` entirely — every world's `cleared`/`bestMoves`/
 `parMoves` resets, re-locking the whole game back to Area 1. Seeds,
@@ -425,24 +455,30 @@ completed run becomes a fresh one rather than a wiped save. This is
 deliberately a *different*, softer reset than the "Reset progress" button
 on Area Select, which still wipes everything including the win count.
 
-`js/ranks.js` maps win count directly to a title — Beginner (0) → Learner
-(3) → Technician (5) → Coded (7) → Hacked (10) → Webbed (15) → Networked
-(25) → Interwebbed (50) — recomputed from `Progress.getWins()` every time
-it's shown rather than stored separately, so it can't drift out of sync.
-Each rank is a multiple of full playthroughs, not incremental score — the
-tiers are deliberately far apart since a "win" is the whole game, not a
-single level. Each rank also carries a `color` used for both the badge text
-and its border on Area Select.
+`js/ranks.js` maps win count directly to a title — `RANKS` is the one
+source of truth for both the tier names and their win thresholds, so this
+doc deliberately doesn't hand-copy the current list (it's grown several
+times over the game's life and hand-copies kept drifting stale — check the
+file itself for the current tiers/thresholds). Recomputed from
+`Progress.getWins()` every time it's shown rather than stored separately,
+so it can't drift out of sync with the actual win count. Each rank is a
+multiple of full playthroughs, not incremental score — the tiers are
+deliberately far apart since a "win" is the whole game, not a single level.
+Each rank also carries a `color` used for both the badge text and its
+border on Area Select.
 
-The top three ranks (Webbed, Networked, Interwebbed) additionally get a
-small particle effect around the badge — rising, color-matched sparks on a
-`<canvas>` overlay (`js/rank-particles.js`), pure vanilla canvas rather than
-p5 since `worlds.html` doesn't otherwise load it and this is a live
-decorative loop, not a simulated/replayed trace like everything else in the
-engine. `updateRankParticles(rank)` runs every time the badge re-renders and
-is cheap to call even when nothing changes — it only tears down and
-restarts the animation when the rank *title* actually changes, and no-ops
-back to hidden below Webbed.
+Every rank from Webbed up additionally gets a small particle effect around
+the badge — rising, color-matched sparks on a `<canvas>` overlay
+(`js/rank-particles.js`), pure vanilla canvas rather than p5 since
+`worlds.html` doesn't otherwise load it and this is a live decorative loop,
+not a simulated/replayed trace like everything else in the engine.
+Intensity escalates with tier (`PARTICLE_INTENSITY`, same file) so the
+highest ranks visibly outshine the earlier sparkly ones rather than just
+swapping color — keep that map's keys in sync with `RANKS` when a new top
+tier is added. `updateRankParticles(rank)` runs every time the badge
+re-renders and is cheap to call even when nothing changes — it only tears
+down and restarts the animation when the rank *title* actually changes, and
+no-ops back to hidden below Webbed.
 
 Area Select also shows a full ranks board (`renderRankBoard`, below the
 world grid) — every tier from `RANKS`, unlocked ones in their real color
@@ -477,7 +513,7 @@ scoping, under its own un-prefixed keys, since it has to be readable before
 you know which slot you're in.
 
 This was a refactor entirely inside `progress.js`: every other file (all
-five level scripts, `worlds.html`, `index.html`) already only ever touched
+level scripts, `worlds.html`, `index.html`) already only ever touched
 save data through `Progress`'s methods, never `localStorage` directly, so
 none of them needed to change at all — confirmed by grepping the whole repo
 for `localStorage` before starting and finding it nowhere outside this file.
@@ -506,15 +542,18 @@ no custom modal, consistent with how "Reset progress" already works.
 ## Enemy guide
 
 `enemies.html`, linked from Area Select. One card per hazard (Scanner,
-Octopus, Squid — the three built so far), each with a small looping demo
+Octopus, Squid, and Area 6's tentacle boss), each with a small looping demo
 animation. Deliberately reuses the real rendering, not a redrawn copy: each
-card builds a tiny fake level (`{grid, start, goal, scanner/octopi/squid}`)
-and a real `GridMazeRunner`, so `runner.draw()` calls the exact same
-`_drawScanner`/`_drawOctopus`/`_drawSquid` the actual worlds use — this
-guide can never visually drift from what a world actually shows, since
-there's nothing to keep in sync by hand. The demo trace is just `wait()`
-repeated (player holds still, hazard still animates from `tick`), reloaded
-every time it finishes so it loops forever.
+card builds a tiny fake level (`{grid, start, goal, scanner/octopi/squid/
+tentacles}`) and a real `GridMazeRunner`, so `runner.draw()` calls the exact
+same `_drawScanner`/`_drawOctopus`/`_drawSquid`/`_drawOctopusBoss` the
+actual worlds use — this guide can never visually drift from what a world
+actually shows, since there's nothing to keep in sync by hand. The demo
+trace is just `wait()` repeated (player holds still, hazard still animates
+from `tick`), reloaded every time it finishes so it loops forever. The boss
+card uses a taller canvas (`canvasH`, per-card override in `mountEnemy`) —
+its tentacles reach further down than the other three hazards' fixed
+132px-tall demo fits.
 
 ## Repo conventions
 

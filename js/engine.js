@@ -1459,6 +1459,17 @@ function squidWatchAt(squid, tick) {
   return squid.pattern[tick % squid.pattern.length];
 }
 
+// A tentacle's "exposed" state is the same trick as the squid's watching
+// state and the scanner's position — a deterministic function of the tick
+// number, repeating on its own cycle. World 6's twist is that the player
+// never queries this directly; the only way to act on it is to have
+// registered a callback beforehand (see simulateCore) — that's the whole
+// point of the level.
+function tentacleExposedAt(tentacle, tick) {
+  if (!tentacle) return false;
+  return tentacle.pattern[tick % tentacle.pattern.length];
+}
+
 // Runs `userCode` against a grid level and returns a trace of every tick.
 function simulateGridMaze(levelConfig, userCode) {
   const { grid, start, goal, scanner, squid } = levelConfig;
@@ -1874,6 +1885,133 @@ function simulateVault(levelConfig, userCode) {
   return { trace, success: state.won, error, phaseEvents };
 }
 
+// World 6 — the boss. Five tentacles, each on its own repeating
+// hidden/exposed cycle (tentacleExposedAt, same deterministic-per-tick
+// trick as the scanner/squid). There is deliberately no query function for
+// "is tentacle N exposed right now" — the only way to act on that moment is
+// to have called onTentacleExposed(id, callback) *before* it happens, and
+// let the engine call that callback for you the instant the tentacle's
+// state flips from hidden to exposed. That's the whole teaching point: this
+// is the first world where the player's code doesn't decide *when*
+// something runs, just what happens when it does. detonate(id) only
+// actually destroys the tentacle if called while it's exposed — calling it
+// blind (no registered handler, guessing a tick number) can still work if
+// you get the timing right by luck or careful counting, same "teaches by
+// fit, not force" latitude every other world's mechanic gets.
+//
+// Still fits the simulate-then-replay contract: everything here is a pure
+// function of the tick number and the player's own code, so the whole
+// fight can be resolved in one synchronous pass exactly like every other
+// world, including nested loops/conditionals inside a registered callback.
+function simulateCore(levelConfig, userCode) {
+  const { grid, start, goal, tentacles } = levelConfig;
+  const rows = grid.length;
+  const cols = grid[0].length;
+  const state = {
+    row: start.row,
+    col: start.col,
+    tentacles: tentacles.map((t) => ({ id: t.id, destroyed: false, prevExposed: false })),
+    handlers: {},
+    firingId: null,
+    currentTick: 0,
+    allViaCallback: true,
+    finished: false,
+    won: false,
+  };
+  const snapshot = () => state.tentacles.map((t) => t.destroyed);
+  const trace = [{ row: state.row, col: state.col, tentaclesDestroyed: snapshot(), event: 'start', tick: 0 }];
+  const phaseEvents = [];
+  let error = null;
+  let steps = 0;
+  let markCount = 0;
+
+  function isFloor(r, c) {
+    return r >= 0 && r < rows && c >= 0 && c < cols && grid[r][c] !== 'wall';
+  }
+  function guard() {
+    steps++;
+    if (steps > MAX_STEPS) throw new Error('Too many moves — check for an infinite loop.');
+  }
+
+  // Fires any tentacle whose exposure just flipped on this tick, letting a
+  // registered handler run synchronously — same "the callback runs the
+  // instant the event happens" contract as a real event listener, just
+  // resolved at simulate time since it's still a pure function of the tick.
+  function checkTentacles(tick) {
+    state.currentTick = tick;
+    tentacles.forEach((def, i) => {
+      const s = state.tentacles[i];
+      if (s.destroyed) return;
+      const exposed = tentacleExposedAt(def, tick);
+      if (exposed && !s.prevExposed) {
+        const handler = state.handlers[def.id];
+        if (handler) {
+          state.firingId = def.id;
+          try { handler(); } finally { state.firingId = null; }
+        }
+      }
+      s.prevExposed = exposed;
+    });
+  }
+
+  function step(newRow, newCol, action) {
+    guard();
+    if (state.finished) return;
+    const tick = trace.length;
+    const line = getCallerLine();
+    if (!isFloor(newRow, newCol)) {
+      state.finished = true;
+      trace.push({ row: newRow, col: newCol, tentaclesDestroyed: snapshot(), event: 'blocked', action, tick, line });
+      return;
+    }
+    checkTentacles(tick);
+    state.row = newRow;
+    state.col = newCol;
+    const atGoal = newRow === goal.row && newCol === goal.col;
+    if (atGoal) {
+      state.finished = true;
+      const allDestroyed = state.tentacles.every((t) => t.destroyed);
+      if (allDestroyed) state.won = true;
+      trace.push({ row: newRow, col: newCol, tentaclesDestroyed: snapshot(), event: allDestroyed ? 'goal' : 'goal-incomplete', action, tick, line });
+      return;
+    }
+    trace.push({ row: newRow, col: newCol, tentaclesDestroyed: snapshot(), event: 'move', action, tick, line });
+  }
+
+  const api = {
+    moveRight: () => step(state.row, state.col + 1, 'moveRight'),
+    moveLeft: () => step(state.row, state.col - 1, 'moveLeft'),
+    wait: () => step(state.row, state.col, 'wait'),
+    onTentacleExposed: (id, callback) => {
+      if (typeof callback === 'function') state.handlers[id] = callback;
+    },
+    detonate: (id) => {
+      const i = tentacles.findIndex((t) => t.id === id);
+      if (i === -1) return;
+      const s = state.tentacles[i];
+      if (s.destroyed) return;
+      if (!tentacleExposedAt(tentacles[i], state.currentTick)) return;
+      s.destroyed = true;
+      if (state.firingId !== id) state.allViaCallback = false;
+    },
+    __mark: (line) => {
+      markCount++;
+      if (markCount > 3000) throw new Error('Loop is running too long — check your loop condition.');
+      phaseEvents.push({ line, beforeMoveIndex: trace.length });
+    },
+  };
+
+  try {
+    const instrumented = instrumentForLoops(userCode);
+    const fn = new Function('moveRight', 'moveLeft', 'wait', 'onTentacleExposed', 'detonate', '__mark', instrumented !== null ? instrumented : userCode);
+    fn(api.moveRight, api.moveLeft, api.wait, api.onTentacleExposed, api.detonate, api.__mark);
+  } catch (e) {
+    error = e.message;
+  }
+
+  return { trace, success: state.won, error, phaseEvents, allViaCallback: state.allViaCallback };
+}
+
 // Exhaustive joint BFS over every octopus's position is exponential in the
 // number of octopi, so with 3+ chasers it's intractable. Instead this
 // constructs *a* working solution with a greedy reactive policy (prefer
@@ -2044,6 +2182,7 @@ class GridMazeRunner {
       this.theme === 'dungeon' ? this.p.color(14, 9, 8) :
       this.theme === 'foundry' ? this.p.color(20, 12, 7) :
       this.theme === 'vault' ? this.p.color(8, 11, 16) :
+      this.theme === 'core' ? this.p.color(16, 6, 10) :
       this.p.color(10, 14, 20)
     );
     p.push();
@@ -2055,10 +2194,11 @@ class GridMazeRunner {
     this._drawPlayer();
     this._drawDarkness();
     p.pop();
-    // The squid is a fixed HUD overseer, not part of the level — drawn
-    // after the pop so it never scrolls with the camera and stays visible
-    // (glowing eye included) even through the darkness mask above.
+    // The squid and the boss are both fixed HUD overseers, not part of the
+    // level — drawn after the pop so they never scroll with the camera and
+    // stay visible even through the darkness mask above.
     this._drawSquid();
+    this._drawOctopusBoss();
   }
 
   // Dungeon theme: torches (plus a small radius around the player, for
@@ -2163,6 +2303,18 @@ class GridMazeRunner {
     const dungeon = this.theme === 'dungeon';
     const foundry = this.theme === 'foundry';
     const vault = this.theme === 'vault';
+    const core = this.theme === 'core';
+
+    if (core) {
+      // Corrupted-flesh-and-metal backdrop — deep red-black with faint
+      // vertical seams, distinct from every earlier theme's cooler palette.
+      p.noStroke();
+      p.fill(20, 8, 14);
+      p.rect(0, 0, cols * this.tile, rows * this.tile);
+      p.stroke(50, 14, 26);
+      p.strokeWeight(1);
+      for (let x = 0; x < cols * this.tile; x += this.tile) p.line(x, 0, x, rows * this.tile);
+    }
 
     if (vault) {
       // Plain steel-blue backdrop with a faint panel grid — reads as a bank
@@ -2220,6 +2372,8 @@ class GridMazeRunner {
           p.fill(isGoal ? p.color(32, 58, 48) : p.color(60, 40, 24));
         } else if (vault) {
           p.fill(isGoal ? p.color(32, 58, 48) : p.color(34, 42, 56));
+        } else if (core) {
+          p.fill(isGoal ? p.color(32, 58, 48) : p.color(54, 20, 30));
         } else {
           p.fill(isGoal ? p.color(32, 58, 48) : p.color(46, 56, 76));
         }
@@ -2227,7 +2381,7 @@ class GridMazeRunner {
 
         // Perimeter glow: a bright edge everywhere the walkable floor meets
         // the void, so it's unmistakable which tiles you can stand on.
-        p.stroke(dungeon ? p.color(210, 130, 50, 160) : foundry ? p.color(255, 140, 50, 170) : vault ? p.color(90, 170, 255, 170) : p.color(90, 200, 230, 170));
+        p.stroke(dungeon ? p.color(210, 130, 50, 160) : foundry ? p.color(255, 140, 50, 170) : vault ? p.color(90, 170, 255, 170) : core ? p.color(220, 60, 90, 170) : p.color(90, 200, 230, 170));
         p.strokeWeight(2);
         if (!isFloor(r - 1, c)) p.line(x + 2, y + 1, x + this.tile - 2, y + 1);
         if (!isFloor(r + 1, c)) p.line(x + 2, y + this.tile - 1, x + this.tile - 2, y + this.tile - 1);
@@ -2261,6 +2415,11 @@ class GridMazeRunner {
         } else if (vault) {
           p.noStroke();
           p.fill(70, 130, 200, 90);
+          p.circle(x + this.tile * 0.25, y + this.tile * 0.25, 3);
+          p.circle(x + this.tile * 0.75, y + this.tile * 0.75, 3);
+        } else if (core) {
+          p.noStroke();
+          p.fill(200, 60, 90, 100);
           p.circle(x + this.tile * 0.25, y + this.tile * 0.25, 3);
           p.circle(x + this.tile * 0.75, y + this.tile * 0.75, 3);
         } else {
@@ -2508,5 +2667,95 @@ class GridMazeRunner {
     p.translate(pos.x, pos.y);
     drawCharacter(p, this.tile, {});
     p.pop();
+  }
+
+  // World 6's boss: a fixed HUD overseer above the play area, same
+  // placement rule as the squid (never scrolls with the camera). Five
+  // tentacles hang from a central head, one per horizontal slot across the
+  // viewport, each ending in a strapped bomb. A tentacle stays short and
+  // dim while hidden, stretches down and glows while exposed (the moment
+  // detonate(id) can actually do anything), and goes limp and grey once
+  // destroyed — reading the boss at a glance should tell you exactly which
+  // ones are live right now, same honesty principle as every other hazard.
+  _drawOctopusBoss() {
+    const tentacles = this.level.tentacles;
+    if (!tentacles) return;
+    const p = this.p;
+    const entry = this.trace[Math.min(this.stepIndex + 1, this.trace.length - 1)];
+    const destroyed = entry.tentaclesDestroyed || tentacles.map(() => false);
+    const t = p.millis() * 0.001;
+    const n = tentacles.length;
+    // Spread the tentacles across the corridor's own width, not the full
+    // viewport — a short corridor (camera pins to x=0 whenever it's
+    // narrower than the viewport, same clamp as everywhere else) otherwise
+    // leaves the outer slots dangling in empty background past the goal.
+    const spanW = Math.min(this.levelWidthPx(), this.viewportW);
+    const headX = spanW / 2;
+    const headY = 30;
+    const margin = 36;
+    const spacing = n > 1 ? (spanW - margin * 2) / (n - 1) : 0;
+
+    p.noStroke();
+    const pulse = 0.5 + 0.5 * Math.sin(t * 1.5);
+    p.fill(150, 20, 70, 30 + pulse * 15);
+    p.circle(headX, headY, 90 + pulse * 8);
+
+    tentacles.forEach((def, i) => {
+      const exposed = tentacleExposedAt(def, entry.tick);
+      const isDead = destroyed[i];
+      const slotX = n > 1 ? margin + i * spacing : headX;
+      const restY = headY + 22;
+      const targetY = isDead ? restY + 14 : exposed ? restY + 108 : restY + 30;
+      const wobble = isDead ? 0 : Math.sin(t * 3 + i * 1.3) * (exposed ? 5 : 3);
+      const tipX = slotX + wobble * 0.6;
+
+      p.noFill();
+      p.stroke(isDead ? p.color(70, 60, 65, 150) : exposed ? p.color(255, 90, 60, 230) : p.color(150, 40, 80, 200));
+      p.strokeWeight(exposed ? 5 : 4);
+      p.beginShape();
+      p.curveVertex(headX, restY);
+      p.curveVertex(headX, restY);
+      p.curveVertex(lerp(headX, slotX, 0.5) + wobble, lerp(restY, targetY, 0.55));
+      p.curveVertex(tipX, targetY);
+      p.curveVertex(tipX, targetY);
+      p.endShape();
+
+      p.noStroke();
+      if (isDead) {
+        p.fill(60, 55, 58);
+        p.circle(tipX, targetY, 12);
+        p.stroke(30, 28, 30);
+        p.strokeWeight(2);
+        p.line(tipX - 4, targetY - 4, tipX + 4, targetY + 4);
+        p.line(tipX - 4, targetY + 4, tipX + 4, targetY - 4);
+        p.noStroke();
+      } else if (exposed) {
+        const glow = 0.6 + 0.4 * Math.sin(t * 10 + i);
+        p.fill(255, 90, 40, 70 * glow);
+        p.circle(tipX, targetY, 22 + glow * 6);
+        p.fill(40, 34, 34);
+        p.circle(tipX, targetY, 13);
+        p.fill(255, 120, 50);
+        p.circle(tipX, targetY, 6);
+      } else {
+        p.fill(50, 40, 44);
+        p.circle(tipX, targetY, 10);
+        p.fill(90, 30, 40);
+        p.circle(tipX, targetY, 4);
+      }
+    });
+
+    p.noStroke();
+    p.fill(90, 22, 48);
+    p.ellipse(headX, headY, 70, 46);
+    p.fill(60, 14, 32);
+    p.ellipse(headX, headY + 6, 50, 26);
+    const allDead = destroyed.length > 0 && destroyed.every(Boolean);
+    p.fill(allDead ? p.color(120, 200, 160) : p.color(255, 60, 60));
+    p.circle(headX - 14, headY - 4, 10);
+    p.circle(headX + 14, headY - 4, 10);
+    p.fill(10, 5, 8);
+    p.circle(headX - 14, headY - 4, 4);
+    p.circle(headX + 14, headY - 4, 4);
   }
 }

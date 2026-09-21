@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Area 6 — The Core — Null Island</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../../css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/acorn/8.11.3/acorn.min.js"></script>
+<style>
+  :root { --accent: #e0435a; --accent-dim: #7a2030; }
+</style>
+</head>
+<body>
+<header class="hero" style="padding:2rem 1.5rem 1rem;">
+  <h1 style="font-size:1.8rem;">Area 6 — The Core</h1>
+  <p>The source of the island's corruption: a mutated thing with five
+  tentacles, each one strapped with a bomb. You can't watch all five at
+  once — you have to tell the terminal what to do the instant each one
+  opens up, then get out of the way and let it happen.</p>
+</header>
+<div class="wrap">
+  <p style="text-align:center;"><a href="../../worlds.html">&larr; back to Area Select</a></p>
+  <div class="world-layout">
+    <div class="panel">
+      <div id="level-canvas-holder"></div>
+      <div class="controls">
+        <button class="button" id="run-btn">Run</button>
+        <button class="button secondary" id="step-btn">Step</button>
+        <span id="status">Write your moves, then press Run.</span>
+      </div>
+      <div class="controls" id="step-controls" style="display:none;">
+        <button class="button secondary" id="step-next-btn">Next &#9654;</button>
+        <span id="step-status"></span>
+      </div>
+      <div id="world-meta" class="world-meta"></div>
+      <div id="achievement-notice" class="world-meta"></div>
+      <a id="next-world-btn" class="button secondary next-world-btn"></a>
+    </div>
+    <div class="panel editor-panel">
+      <h2>Your code</h2>
+      <textarea id="code">// There's no function that tells you when a tentacle is exposed — the
+// only way to react in time is to register a handler BEFORE it happens:
+//
+// onTentacleExposed(0, () => {
+//   detonate(0);
+// });
+//
+// Register one for every tentacle (0-4), THEN let time pass with wait()
+// or a loop of wait() calls — your handlers fire on their own the
+// instant each tentacle opens up. detonate() only works while its
+// tentacle is actually exposed.
+wait();
+</textarea>
+      <div class="hint" id="level-hint"></div>
+      <div class="hint">
+        Register a handler for every tentacle first, then run out the
+        clock with <code>wait()</code> (a loop makes this short) until
+        every bomb has gone off. Only once all five are destroyed does
+        walking to the end actually count.
+      </div>
+      <div class="command-palette">
+        <h3>Commands</h3>
+        <div id="command-list" class="command-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="../../js/engine.js"></script>
+<script src="../../js/progress.js"></script>
+<script src="../../js/worlds-registry.js"></script>
+<script src="../../js/achievements.js"></script>
+<script src="world6.js"></script>
+</body>
+</html>
