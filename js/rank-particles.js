@@ -12,6 +12,8 @@ const PARTICLE_INTENSITY = {
   Interwebbed: 3,
   Darkwebbed: 4,
   'Code Ascendant': 5,
+  Error: 6,
+  Voxelist: 7,
 };
 const PARTICLE_MARGIN = 24;
 

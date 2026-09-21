@@ -12,6 +12,8 @@ const RANKS = [
   { min: 50, title: 'Interwebbed', color: [224, 196, 90] },
   { min: 100, title: 'Darkwebbed', color: [90, 45, 145] },
   { min: 250, title: 'Code Ascendant', color: [240, 245, 255] },
+  { min: 500, title: 'Error', color: [255, 45, 85] },
+  { min: 1000, title: 'Voxelist', color: [140, 255, 90] },
 ];
 
 function computeRank() {
