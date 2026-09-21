@@ -14,6 +14,8 @@ const PARTICLE_INTENSITY = {
   'Code Ascendant': 5,
   Error: 6,
   Voxelist: 7,
+  'Web Voyager': 8,
+  Malware: 9,
 };
 const PARTICLE_MARGIN = 24;
 

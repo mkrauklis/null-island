@@ -14,6 +14,8 @@ const RANKS = [
   { min: 250, title: 'Code Ascendant', color: [240, 245, 255] },
   { min: 500, title: 'Error', color: [255, 45, 85] },
   { min: 1000, title: 'Voxelist', color: [140, 255, 90] },
+  { min: 1500, title: 'Web Voyager', color: [70, 160, 255] },
+  { min: 2250, title: 'Malware', color: [180, 20, 40] },
 ];
 
 function computeRank() {
