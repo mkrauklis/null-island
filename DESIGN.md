@@ -471,51 +471,6 @@ hats draw after (on top of an already-drawn head) — the two accessory
 categories need opposite z-order and there was no getting around that with
 a single draw pass.
 
-## Wins, rank, and the re-lock loop
-
-A **win** means every world (all 6, now that Area 6 is built) is cleared at
-once. `Progress.checkForWin(WORLDS)`, called after every clear from each world's
-own script, checks that; when it's true it increments a stored win count
-and wipes `PROGRESS_KEY` entirely — every world's `cleared`/`bestMoves`/
-`parMoves` resets, re-locking the whole game back to Area 1. Seeds,
-achievements, unlocked command-palette snippets, and character
-customization are untouched — only the lock/clear state resets, so a
-completed run becomes a fresh one rather than a wiped save. This is
-deliberately a *different*, softer reset than the "Reset progress" button
-on Area Select, which still wipes everything including the win count.
-
-`js/ranks.js` maps win count directly to a title — `RANKS` is the one
-source of truth for both the tier names and their win thresholds, so this
-doc deliberately doesn't hand-copy the current list (it's grown several
-times over the game's life and hand-copies kept drifting stale — check the
-file itself for the current tiers/thresholds). Recomputed from
-`Progress.getWins()` every time it's shown rather than stored separately,
-so it can't drift out of sync with the actual win count. Each rank is a
-multiple of full playthroughs, not incremental score — the tiers are
-deliberately far apart since a "win" is the whole game, not a single level.
-Each rank also carries a `color` used for both the badge text and its
-border on Area Select.
-
-Every rank from Webbed up additionally gets a small particle effect around
-the badge — rising, color-matched sparks on a `<canvas>` overlay
-(`js/rank-particles.js`), pure vanilla canvas rather than p5 since
-`worlds.html` doesn't otherwise load it and this is a live decorative loop,
-not a simulated/replayed trace like everything else in the engine.
-Intensity escalates with tier (`PARTICLE_INTENSITY`, same file) so the
-highest ranks visibly outshine the earlier sparkly ones rather than just
-swapping color — keep that map's keys in sync with `RANKS` when a new top
-tier is added. `updateRankParticles(rank)` runs every time the badge
-re-renders and is cheap to call even when nothing changes — it only tears
-down and restarts the animation when the rank *title* actually changes, and
-no-ops back to hidden below Webbed.
-
-Area Select also shows a full ranks board (`renderRankBoard`, below the
-world grid) — every tier from `RANKS`, unlocked ones in their real color
-with a border, locked ones dimmed via opacity, and the player's current
-tier labeled "You are here." Unlike the achievement grid, locked rank
-titles aren't hidden behind "???" — a rank name and its win requirement
-aren't a mystery to preserve, just a target not yet reached.
-
 ## Area 3 lighting
 
 Dungeon-theme grid mazes render mostly dark, lit only by torches (placed by
@@ -532,9 +487,9 @@ for any theme but `'dungeon'`.
 ## Save slots (multiple games)
 
 Everything `Progress` reads/writes — worlds progress, seeds, snippets,
-achievements, wins, character — is scoped to a "slot" (one save file), so
+achievements, character — is scoped to a "slot" (one save file), so
 more than one person can play on the same browser without overwriting each
-other. The six data keys that used to be the whole story are now just
+other. The data keys that used to be the whole story are now just
 suffixes; `Progress._key(suffix)` prefixes whichever slot is active
 (`` `null-island:slot:${activeId}:${suffix}` ``). Slot bookkeeping itself —
 the slot list and which one is active — deliberately lives *outside* that
@@ -549,7 +504,7 @@ for `localStorage` before starting and finding it nowhere outside this file.
 
 New methods: `listSlots`/`getActiveSlotId`/`getActiveSlot`/`createSlot`/
 `switchActiveSlot`/`renameSlot`/`deleteSlot`, plus `getSlotSummary(id)` for
-reading a slot's wins/cleared-count *without* switching into it first (for
+reading a slot's cleared-count *without* switching into it first (for
 a save picker that shows every slot's progress at once). `deleteSlot` never
 leaves zero slots — deleting the last one immediately creates a fresh
 "Slot 1" in its place, so every other method always has somewhere valid to
@@ -560,7 +515,7 @@ yet, it checks whether real data exists under the old un-prefixed keys
 (pre-dating this feature) and, if so, copies it into a new "Slot 1" rather
 than orphaning it — copies, doesn't delete, so the legacy keys are harmless
 leftovers rather than a silent data-loss risk. Verified by seeding legacy
-keys by hand and confirming every field (progress, wins, character,
+keys by hand and confirming every field (progress, character,
 achievements) survives into the new slot untouched.
 
 UI lives on the splash screen (`index.html`, "Save file" panel: a `<select>`
@@ -598,15 +553,13 @@ not just a couple of grid tiles like the other three hazards' 132px-tall,
   world-specific level data stays in each world's own folder.
 - `js/progress.js` — localStorage save data, scoped to a save slot: clears,
   best moves, per-world seed and generated par, unlocked command-palette
-  snippets, achievements, wins, character. Also owns slot management itself
+  snippets, achievements, character. Also owns slot management itself
   (create/switch/rename/delete) — see "Save slots" above.
 - `js/worlds-registry.js` — static ordered metadata for all six worlds. Its
   `parMoves` is only a placeholder shown before a player has ever generated
   that world's real (seeded) layout.
 - `js/achievements.js` — the badge catalog, plus the one cross-world check
   (`escapee`). Per-world detection lives in each world's own script.
-- `js/ranks.js` — win-count-to-title/color mapping (`RANKS`, `computeRank`).
-- `js/rank-particles.js` — the canvas spark effect for the top three ranks.
 - `css/style.css` — shared theme.
 - No build step. Dependencies (all CDN): p5.js, CodeMirror (theme:
   `dracula`), and Acorn (syntax-error line/column detection only).

@@ -13,7 +13,6 @@ const ACHIEVEMENTS = [
   { id: 'backtracker', title: 'Second Thoughts', icon: '\u{21A9}\u{FE0F}', description: 'Move backward and still reach the goal.' },
   { id: 'perfectionist', title: 'Perfectionist', icon: '\u{2B50}', description: 'Clear a level in par — the fewest possible moves.' },
   { id: 'escapee', title: 'Island Escapee', icon: '\u{1F3DD}\u{FE0F}', description: 'Clear every area currently on the island.' },
-  { id: 'malware', title: 'Ghost in the Machine', icon: '\u{1F9A0}', description: 'Reach the Malware rank (2250 wins).' },
 ];
 
 // Cross-world: call after any clear is recorded. Returns newly-earned ids.

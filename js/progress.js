@@ -5,12 +5,12 @@
 // "this browser, this machine."
 //
 // Multiple saves: everything below is scoped to a "slot" (one save file —
-// its own worlds progress, achievements, snippets, seeds, wins, and
-// character look, all independent of any other slot's). The six data keys
-// that used to be the whole story are now just suffixes; _key() prefixes
-// whichever slot is currently active. Slot bookkeeping itself (the slot
-// list and which one is active) deliberately lives OUTSIDE that scoping —
-// it has to be readable before you know which slot you're in.
+// its own worlds progress, achievements, snippets, seeds, and character
+// look, all independent of any other slot's). The data keys that used to
+// be the whole story are now just suffixes; _key() prefixes whichever slot
+// is currently active. Slot bookkeeping itself (the slot list and which
+// one is active) deliberately lives OUTSIDE that scoping — it has to be
+// readable before you know which slot you're in.
 
 const SLOTS_INDEX_KEY = 'null-island:slots:v1';
 const ACTIVE_SLOT_KEY = 'null-island:active-slot:v1';
@@ -20,7 +20,6 @@ const LEGACY_KEYS = {
   achievements: 'null-island:achievements:v1',
   seeds: 'null-island:seeds:v1',
   character: 'null-island:character:v1',
-  wins: 'null-island:wins:v1',
 };
 
 const Progress = {
@@ -97,11 +96,10 @@ const Progress = {
   // into each one first.
   getSlotSummary(id) {
     const key = (suffix) => `null-island:slot:${id}:${suffix}`;
-    const wins = this._load(key('wins')) || 0;
     const progress = this._load(key('progress')) || {};
     const worldsCleared = Object.values(progress).filter((w) => w && w.cleared).length;
     const character = this._load(key('character')) || {};
-    return { wins, worldsCleared, character };
+    return { worldsCleared, character };
   },
 
   createSlot(name) {
@@ -240,32 +238,12 @@ const Progress = {
     this._save(this._key('character'), character);
   },
 
-  getWins() {
-    return this._load(this._key('wins')) || 0;
-  },
-
-  // Call after recording any clear. A "win" means every world (all 6,
-  // whether built yet or not — this is a no-op until World 6 ships) is
-  // cleared. When that happens: count the win, then wipe every world's
-  // cleared/bestMoves/par so the game re-locks back to World 1 for a fresh
-  // run. Seeds, achievements, unlocked snippets, and character
-  // customization are untouched — only the lock/clear state resets.
-  checkForWin(worldsInOrder) {
-    const allCleared = worldsInOrder.every((w) => this.getWorld(w.id).cleared);
-    if (!allCleared) return { won: false };
-    const wins = this.getWins() + 1;
-    this._save(this._key('wins'), wins);
-    this._save(this._key('progress'), {});
-    return { won: true, wins };
-  },
-
   resetAll() {
     try {
       localStorage.removeItem(this._key('progress'));
       localStorage.removeItem(this._key('snippets'));
       localStorage.removeItem(this._key('achievements'));
       localStorage.removeItem(this._key('seeds'));
-      localStorage.removeItem(this._key('wins'));
     } catch (e) {
       // ignore
     }

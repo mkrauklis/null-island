@@ -11,20 +11,12 @@
   <h1 style="font-size:2rem;">Null Island</h1>
   <p>Pick an area. Locked areas open once you've cleared the one before them.
   <strong>Par</strong> is the fewest moves anyone's found to clear a level —
-  match it and you earn a <span class="star">&#9733;</span>. Clear every
-  area for a <strong>win</strong> — then all six lock again for a fresh run.</p>
-  <div class="rank-wrap" id="rank-wrap">
-    <canvas id="rank-particles"></canvas>
-    <div id="rank-badge" class="rank-badge"></div>
-  </div>
+  match it and you earn a <span class="star">&#9733;</span>.</p>
   <p id="save-indicator" style="color:var(--dim); font-size:0.85rem; margin-top:0.75rem;"></p>
 </header>
 <div class="wrap">
   <p style="text-align:center;"><a href="index.html">&larr; back to title</a> &middot; <a href="enemies.html">Enemy Guide</a></p>
   <div id="world-grid" class="world-grid"></div>
-
-  <h2 style="text-align:center; margin-top:2.5rem; font-size:1.1rem; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em;">Ranks</h2>
-  <div id="rank-grid" class="rank-grid"></div>
 
   <h2 style="text-align:center; margin-top:2.5rem; font-size:1.1rem; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em;">Achievements</h2>
   <div id="achievement-grid" class="achievement-grid"></div>
@@ -35,25 +27,12 @@
 </div>
 <script src="js/worlds-registry.js"></script>
 <script src="js/achievements.js"></script>
-<script src="js/ranks.js"></script>
-<script src="js/rank-particles.js"></script>
 <script src="js/progress.js"></script>
 <script>
 function renderSaveIndicator() {
   const el = document.getElementById('save-indicator');
   const slot = Progress.getActiveSlot();
   el.innerHTML = `Save: <strong>${slot.name}</strong> — <a href="index.html">switch save</a>`;
-}
-
-function renderRank() {
-  const el = document.getElementById('rank-badge');
-  const rank = computeRank();
-  const winWord = rank.wins === 1 ? 'win' : 'wins';
-  const [r, g, b] = rank.color;
-  el.style.borderColor = `rgb(${r},${g},${b})`;
-  el.innerHTML = `Rank: <strong style="color:rgb(${r},${g},${b})">${rank.title}</strong> (${rank.wins} ${winWord})` +
-    (rank.next ? ` — ${rank.next.winsAway} more to ${rank.next.title}` : ' — max rank');
-  updateRankParticles(rank);
 }
 
 function renderGrid() {
@@ -103,40 +82,6 @@ function renderGrid() {
   });
 }
 
-function renderRankBoard() {
-  const wins = Progress.getWins();
-  const currentTitle = computeRank().title;
-  const gridEl = document.getElementById('rank-grid');
-  gridEl.innerHTML = '';
-  RANKS.forEach((r) => {
-    const unlocked = wins >= r.min;
-    const isCurrent = r.title === currentTitle;
-    const card = document.createElement('div');
-    card.className = 'panel rank-card' + (unlocked ? ' unlocked' : ' locked') + (isCurrent ? ' current' : '');
-    const [red, g, b] = r.color;
-    if (unlocked) {
-      card.style.borderColor = `rgb(${red},${g},${b})`;
-    }
-    const winWord = r.min === 1 ? 'win' : 'wins';
-    card.innerHTML = `<div class="rank-dot" style="background:rgb(${red},${g},${b})"></div>
-      <div class="rank-card-title" style="${unlocked ? `color:rgb(${red},${g},${b})` : ''}">${r.title}</div>
-      <div class="rank-card-req">${r.min} ${winWord}</div>` +
-      (isCurrent ? '<div class="rank-card-current">You are here</div>' : '');
-    gridEl.appendChild(card);
-  });
-}
-
-// Rank-based achievement, checked on every load — Progress.unlockAchievement
-// is itself idempotent (isNew is only true the first time), so there's no
-// need to track "did we already announce this" separately.
-function checkRankAchievements() {
-  const rank = computeRank();
-  if (rank.title === 'Malware') {
-    const { isNew } = Progress.unlockAchievement('malware');
-    if (isNew) renderAchievements();
-  }
-}
-
 function renderAchievements() {
   const earned = Progress.getAchievements();
   const gridEl = document.getElementById('achievement-grid');
@@ -157,8 +102,6 @@ document.getElementById('reset-btn').addEventListener('click', () => {
     Progress.resetAll();
     renderGrid();
     renderAchievements();
-    renderRank();
-    renderRankBoard();
   }
 });
 
@@ -166,9 +109,6 @@ checkEscapeeAchievement(WORLDS);
 renderSaveIndicator();
 renderGrid();
 renderAchievements();
-renderRank();
-renderRankBoard();
-checkRankAchievements();
 </script>
 </body>
 </html>

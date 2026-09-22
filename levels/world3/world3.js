@@ -148,7 +148,6 @@ function renderStatus() {
     renderWorldMeta();
     renderNextWorldLink(WORLD_ID);
     checkAchievements();
-    checkGameWinAndAnnounce();
   }
   lastStatus = runner.status;
 

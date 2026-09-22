@@ -296,33 +296,6 @@ select {
   color: var(--accent);
 }
 
-.rank-wrap {
-  position: relative;
-  display: inline-block;
-  margin-top: 1rem;
-}
-
-.rank-badge {
-  margin-top: 0;
-  position: relative;
-  z-index: 1;
-  display: inline-block;
-  padding: 0.4rem 1rem;
-  border: 1px solid var(--accent);
-  border-radius: 20px;
-  color: var(--ink);
-  font-size: 0.9rem;
-}
-
-#rank-particles {
-  display: none;
-  position: absolute;
-  top: -24px;
-  left: -24px;
-  z-index: 0;
-  pointer-events: none;
-}
-
 /* World select / settings */
 .world-grid {
   display: grid;
@@ -438,54 +411,6 @@ select {
   margin-top: 0.5rem;
   color: var(--dim);
   font-size: 0.9rem;
-}
-
-/* Rank board */
-.rank-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 0.75rem;
-  margin-top: 1rem;
-}
-
-.rank-card {
-  text-align: center;
-  padding: 0.9rem 0.5rem;
-}
-
-.rank-card.locked {
-  opacity: 0.4;
-}
-
-.rank-card.current {
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
-}
-
-.rank-dot {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  margin: 0 auto 0.5rem;
-}
-
-.rank-card-title {
-  font-size: 0.85rem;
-  color: var(--ink);
-  font-weight: bold;
-}
-
-.rank-card-req {
-  font-size: 0.75rem;
-  color: var(--dim);
-  margin-top: 0.15rem;
-}
-
-.rank-card-current {
-  font-size: 0.7rem;
-  color: var(--dim);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-top: 0.4rem;
 }
 
 /* Enemy guide */

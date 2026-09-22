@@ -98,10 +98,9 @@ function renderSlotSelect() {
   el.innerHTML = '';
   slots.forEach((s) => {
     const summary = Progress.getSlotSummary(s.id);
-    const winWord = summary.wins === 1 ? 'win' : 'wins';
     const opt = document.createElement('option');
     opt.value = s.id;
-    opt.textContent = `${s.name} — ${summary.wins} ${winWord}, ${summary.worldsCleared} cleared`;
+    opt.textContent = `${s.name} — ${summary.worldsCleared} cleared`;
     if (s.id === activeId) opt.selected = true;
     el.appendChild(opt);
   });
