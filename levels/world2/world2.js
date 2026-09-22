@@ -86,6 +86,9 @@ let resultCache = null;
 let errorLine = null;
 let stepController;
 let stepping = false;
+// Starts on the first Run/Step click on this page load, not page open —
+// reading the instructions shouldn't count against your time.
+let firstRunMs = null;
 
 function sketch(p) {
   p.setup = () => {
@@ -120,7 +123,8 @@ function renderWorldMeta() {
   }
   const starred = state.bestMoves <= LEVEL.parMoves;
   el.innerHTML = `Best: ${state.bestMoves} moves (par ${LEVEL.parMoves})` +
-    (starred ? ' <span class="star">&#9733;</span>' : '');
+    (starred ? ' <span class="star">&#9733;</span>' : '') +
+    (state.bestTimeMs != null ? ` &middot; fastest ${formatDuration(state.bestTimeMs)}` : '');
 }
 
 function renderStatus() {
@@ -136,8 +140,9 @@ function renderStatus() {
 
   if (runner.status === 'won' && lastStatus !== 'won') {
     const moves = runner.trace.length - 1;
-    const updated = Progress.recordClear(WORLD_ID, moves);
-    resultCache = { moves, bestMoves: updated.bestMoves, starred: updated.bestMoves <= LEVEL.parMoves };
+    const timeMs = firstRunMs !== null ? performance.now() - firstRunMs : null;
+    const updated = Progress.recordClear(WORLD_ID, moves, timeMs);
+    resultCache = { moves, bestMoves: updated.bestMoves, starred: updated.bestMoves <= LEVEL.parMoves, timeMs, bestTimeMs: updated.bestTimeMs };
     renderWorldMeta();
     renderNextWorldLink(WORLD_ID);
     checkAchievements();
@@ -147,7 +152,8 @@ function renderStatus() {
   switch (runner.status) {
     case 'won': {
       const r = resultCache;
-      statusEl.textContent = `Made it to the grate in ${r.moves} moves — best ${r.bestMoves}${r.starred ? ' ★' : ''} (par ${LEVEL.parMoves}).`;
+      const timeNote = r.timeMs != null ? ` in ${formatDuration(r.timeMs)} (best ${formatDuration(r.bestTimeMs)})` : '';
+      statusEl.textContent = `Made it to the grate in ${r.moves} moves — best ${r.bestMoves}${r.starred ? ' ★' : ''} (par ${LEVEL.parMoves})${timeNote}.`;
       break;
     }
     case 'blocked': {
@@ -250,6 +256,7 @@ function highlightSyntaxError(err) {
 }
 
 function runCode() {
+  if (firstRunMs === null) firstRunMs = performance.now();
   const code = editor.getValue();
   clearSyntaxHighlight();
   const syntaxErr = findSyntaxError(code);
@@ -266,6 +273,7 @@ function runCode() {
 // the shared step controller (engine.js) instead of auto-playing it — one
 // click of Next advances one move OR one for-loop init/test/update phase.
 function stepCode() {
+  if (firstRunMs === null) firstRunMs = performance.now();
   const code = editor.getValue();
   clearSyntaxHighlight();
   const syntaxErr = findSyntaxError(code);

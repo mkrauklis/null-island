@@ -97,6 +97,20 @@ text suggests). A clear earns a star when `bestMoves <= parMoves`.
 `worlds-registry.js` pins each built world's par as a plain number so the
 world-select screen can show it without loading that world's game code.
 
+**Fastest time:** alongside `bestMoves`, `Progress.recordClear` also tracks
+`bestTimeMs` — a real wall-clock stopwatch, not a function of the trace
+(move count and playback speed are the same regardless of how fast a
+player actually solved it, so this is a genuinely different stat, not a
+restatement of par). Each world's own script starts the clock
+(`firstRunMs = performance.now()`) on the *first* Run or Step click on that
+page load, not on page open — reading the instructions and hint text
+shouldn't count against you. Reloading the page starts a fresh clock, so
+this measures "how long did this sitting take," not cumulative time spent
+across every visit ever. Displayed via `formatDuration` (`progress.js` —
+lives there rather than engine.js since `worlds.html` and `index.html`
+load `progress.js` but not the p5-dependent `engine.js`) both in each
+level's own status line and in its Area Select card.
+
 **Command palette:** each level lists its available commands next to the
 editor. A command starts as inert text; the first time the player actually
 types it in their own code (checked on every CodeMirror change event,

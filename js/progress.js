@@ -12,6 +12,17 @@
 // one is active) deliberately lives OUTSIDE that scoping — it has to be
 // readable before you know which slot you're in.
 
+// m:ss for a duration in milliseconds — shared by every world's "fastest
+// time" display and by worlds.html's per-world score line. Lives here
+// rather than engine.js since this file (unlike engine.js) is loaded by
+// every page that shows a time, including worlds.html and index.html.
+function formatDuration(ms) {
+  const totalSeconds = Math.round(ms / 1000);
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 const SLOTS_INDEX_KEY = 'null-island:slots:v1';
 const ACTIVE_SLOT_KEY = 'null-island:active-slot:v1';
 const LEGACY_KEYS = {
@@ -153,16 +164,21 @@ const Progress = {
 
   getWorld(worldId) {
     const all = this._load(this._key('progress')) || {};
-    return all[worldId] || { cleared: false, bestMoves: null, parMoves: null };
+    return all[worldId] || { cleared: false, bestMoves: null, parMoves: null, bestTimeMs: null };
   },
 
-  // Records a clear, keeping the lowest move count ever achieved. Returns
-  // the updated { cleared, bestMoves, parMoves } for that world.
-  recordClear(worldId, moves) {
+  // Records a clear, keeping the lowest move count and (if given) the
+  // fastest clock time ever achieved. `timeMs` is optional — callers that
+  // don't track a clock (or whose timer never started) can omit it, and
+  // bestTimeMs just stays whatever it already was. Returns the updated
+  // { cleared, bestMoves, parMoves, bestTimeMs } for that world.
+  recordClear(worldId, moves, timeMs) {
     const all = this._load(this._key('progress')) || {};
-    const prev = all[worldId] || { cleared: false, bestMoves: null, parMoves: null };
+    const prev = all[worldId] || { cleared: false, bestMoves: null, parMoves: null, bestTimeMs: null };
     const bestMoves = prev.bestMoves === null ? moves : Math.min(prev.bestMoves, moves);
-    all[worldId] = { ...prev, cleared: true, bestMoves };
+    const bestTimeMs = timeMs == null ? (prev.bestTimeMs ?? null)
+      : prev.bestTimeMs == null ? timeMs : Math.min(prev.bestTimeMs, timeMs);
+    all[worldId] = { ...prev, cleared: true, bestMoves, bestTimeMs };
     this._save(this._key('progress'), all);
     return all[worldId];
   },

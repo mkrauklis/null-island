@@ -74,7 +74,8 @@ function renderGrid() {
       const starred = par !== null && state.bestMoves <= par;
       score.innerHTML = `Best: ${state.bestMoves} moves` +
         (par !== null ? ` (par ${par})` : '') +
-        (starred ? ' <span class="star">&#9733;</span>' : '');
+        (starred ? ' <span class="star">&#9733;</span>' : '') +
+        (state.bestTimeMs != null ? ` &middot; fastest ${formatDuration(state.bestTimeMs)}` : '');
       wrapper.appendChild(score);
     }
 
