@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Area 7 — The Frozen Caves — Null Island</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../../css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/acorn/8.11.3/acorn.min.js"></script>
+<style>
+  :root { --accent: #7fd4ff; --accent-dim: #2d6b87; }
+</style>
+</head>
+<body>
+<header class="hero" style="padding:2rem 1.5rem 1rem;">
+  <h1 style="font-size:1.8rem;">Area 7 — The Frozen Caves</h1>
+  <p>The helicopter goes down again — a storm, then ice. Underneath it, a
+  tunnel system winds through the island's frozen underside, deeper and
+  older than anything above. Every fork leads somewhere real; every dead
+  end needs backing out of.</p>
+</header>
+<div class="wrap">
+  <p style="text-align:center;"><a href="../../worlds.html">&larr; back to Area Select</a></p>
+  <div class="world-layout">
+    <div class="panel">
+      <div id="level-canvas-holder"></div>
+      <div class="controls">
+        <button class="button" id="run-btn">Run</button>
+        <button class="button secondary" id="step-btn">Step</button>
+        <button class="button secondary" id="explore-btn">Explore</button>
+        <span id="status">Write your moves, then press Run.</span>
+      </div>
+      <div class="controls" id="step-controls" style="display:none;">
+        <button class="button secondary" id="step-next-btn">Next &#9654;</button>
+        <span id="step-status"></span>
+      </div>
+      <div id="world-meta" class="world-meta"></div>
+      <div id="achievement-notice" class="world-meta"></div>
+      <a id="next-world-btn" class="button secondary next-world-btn"></a>
+    </div>
+    <div class="panel editor-panel">
+      <h2>Your code</h2>
+      <textarea id="code">// openDirections() returns which of up/down/left/right are open from
+// wherever you're standing right now, e.g. ['up', 'right'] — not a map
+// of the whole cave, just what's around you this instant. atGoal() tells
+// you whether you've actually found the exit yet.
+//
+// This is a real maze — every fork leads somewhere, and every dead end
+// needs backing out of before you can try the next one. A function that
+// calls itself — checking atGoal() first, and undoing its own moves
+// before it returns if it hasn't found anything — tends to handle a
+// shape like that no matter how it's actually laid out.
+//
+// Not sure where to start? Click "Explore" to walk around with the
+// arrow keys first and get a feel for the place.
+moveRight();
+</textarea>
+      <div class="hint" id="level-hint"></div>
+      <div class="hint">
+        <code>openDirections()</code> never tells you which way is right —
+        only which ways are open. The cave itself has exactly one route
+        from start to exit (no loops to worry about), so "every direction
+        except the one I just came from" is always a safe rule to explore
+        by. Check <code>atGoal()</code> before you go further — a search
+        that keeps exploring after it's already found the exit will run
+        out of moves on a big enough cave.
+      </div>
+      <div class="command-palette">
+        <h3>Commands</h3>
+        <div id="command-list" class="command-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="../../js/engine.js"></script>
+<script src="../../js/progress.js"></script>
+<script src="../../js/worlds-registry.js"></script>
+<script src="../../js/achievements.js"></script>
+<script src="world7.js"></script>
+</body>
+</html>

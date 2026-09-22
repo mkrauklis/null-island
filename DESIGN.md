@@ -81,9 +81,13 @@ token an underline in CodeMirror, cleared on the next edit.
 
 **Progress (`js/progress.js`):** localStorage-backed, no accounts. Per world,
 tracks `cleared` and `bestMoves` (the lowest move count that has ever
-cleared it). A world is unlocked if it's Area 1, or the world before it is
-cleared — `js/worlds-registry.js` holds the ordered list every page checks
-this against, plus each built world's `parMoves`.
+cleared it). The *intended* rule is that a world is unlocked if it's Area
+1, or the world before it is cleared (`js/worlds-registry.js` holds the
+ordered list every page checks this against) — that logic still lives in
+`Progress._isUnlockedByProgress`, but `isUnlocked` itself is currently
+short-circuited to always return true (direct request, while later areas
+are still being built/tested). Re-enabling real gating is a one-line
+change; see the comment right above it in `progress.js`.
 
 **Par and stars:** `parMoves` is the *true* minimum number of actions to
 clear a level, computed by BFS over the level's own simulation rules
@@ -457,6 +461,66 @@ still fires immediately and normally underneath it — the cutscene is a
 purely visual overlay layered on top of `runner.draw()` for a few seconds,
 not a special data path.
 
+### Area 7 — The Frozen Caves (bonus, unlocked after The Core) — built
+**Teaches:** recursion.
+The helicopter that escaped in Area 6's ending goes down again, this time
+over ice — a bonus/secret area appended after the game's nominal final
+boss, not inserted into the main sequence (it sits after `world6` in
+`WORLDS`, so the existing linear `isUnlocked` logic already gates it
+correctly with no new unlock mechanism needed). A big generated maze
+(`generateMaze` — already a perfect maze, a spanning tree with exactly one
+route and no loops) with **no hazards at all**: the entire challenge is
+that it's too large to solve by hand-tracing a specific path, not a timing
+or spatial threat like every earlier world's mechanic.
+
+`openDirections()` (new query on `simulateGridMaze`'s shared api, engine.js
+— harmless to every other world using that function, since none of them
+reference it) returns which of up/down/left/right are open from wherever
+the player currently is, as plain strings — nothing about the maze's
+overall shape. `atGoal()` is the same read-only, no-tick contract, telling
+the player's code whether it's actually found the exit yet. Together they
+invite the natural solution: a function that calls itself, trying every
+direction except the one it just arrived from (a complete and correct
+exploration rule specifically *because* the maze is a tree — no loops
+means no risk of wandering in circles), checking `atGoal()` before it
+recurses further and undoing its own move before it returns if that
+branch was a dead end.
+
+**`atGoal()` isn't just a nicety — it's load-bearing.** `guard()` (the
+existing "Too many moves" safety net every simulate function shares)
+increments on every move call regardless of whether the game's already
+been won, since it runs before the `state.won` check. A recursive search
+that keeps exhaustively exploring after finding the goal (instead of
+propagating a "found it" `return true` back up through its own call
+stack) can rack up enough further move calls unwinding itself to trip that
+guard on a big enough maze — caught by testing an actual naive-exhaustive
+solve, not by inspection. The maze size itself is also deliberately capped
+so that even the true worst case (every edge crossed twice, if the goal
+happened to be the very last cell a proper early-exiting search would
+reach) stays comfortably under the guard's limit.
+
+**Explore mode.** A new "Explore" button lets the player walk the maze by
+hand with the arrow keys before writing any code — scouting, not an
+attempt. Reuses `GridMazeRunner`'s own trace/playback machinery rather
+than a separate rendering path: each key press just appends one more
+`'move'` trace entry and lets the existing `update()` loop animate it
+exactly like a real run would, one tile over one `GRID_STEP_TIME`. It
+never marks a `'goal'` event even if the player walks onto the exit tile
+by hand, so exploring can never itself trigger a win, touch
+`Progress.recordClear`, or start the fastest-time clock.
+
+**The intro.** The first time a save slot ever opens this world, a short
+scripted cutscene plays before the maze itself does — the helicopter
+spiraling down through a storm, an impact flash, then the character
+standing up out of the wreck — narrating how the player got here. Tracked
+via `Progress.getSeenIntros()`/`markIntroSeen(worldId)` (a small per-slot
+list, same idempotent shape as achievements) so it plays exactly once per
+slot; "Reset progress" clears it too, same as everything else. Click
+anywhere to skip. Entirely self-contained in `world7.js` (its own
+`drawCrashIntro`, not a `GridMazeRunner` feature) — `p.draw()` shows the
+cutscene instead of the maze until it finishes or is skipped, then hands
+off to normal play.
+
 ## The player character
 
 Customizable from a panel on the splash screen (`index.html`): species
@@ -569,7 +633,7 @@ not just a couple of grid tiles like the other three hazards' 132px-tall,
   best moves, per-world seed and generated par, unlocked command-palette
   snippets, achievements, character. Also owns slot management itself
   (create/switch/rename/delete) — see "Save slots" above.
-- `js/worlds-registry.js` — static ordered metadata for all six worlds. Its
+- `js/worlds-registry.js` — static ordered metadata for every world. Its
   `parMoves` is only a placeholder shown before a player has ever generated
   that world's real (seeded) layout.
 - `js/achievements.js` — the badge catalog, plus the one cross-world check

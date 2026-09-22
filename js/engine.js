@@ -1547,6 +1547,28 @@ function simulateGridMaze(levelConfig, userCode) {
     moveUp: () => step(state.row - 1, state.col, 'moveUp'),
     moveDown: () => step(state.row + 1, state.col, 'moveDown'),
     wait: () => step(state.row, state.col, 'wait'),
+    // Read-only query, doesn't consume a tick — same contract as
+    // switches()/octopusNear(). Returns which of up/down/left/right lead
+    // to floor from wherever the player currently is, as plain direction
+    // strings — the array-of-directions hook Area 7's maze is built
+    // around, since a generated maze is a tree (no loops), so "every
+    // direction except the one I arrived from" is a complete, correct
+    // exploration rule without needing any other state. Unused by any
+    // other world's code, so harmless to expose everywhere.
+    openDirections: () => {
+      const dirs = [];
+      if (isFloor(state.row - 1, state.col)) dirs.push('up');
+      if (isFloor(state.row + 1, state.col)) dirs.push('down');
+      if (isFloor(state.row, state.col - 1)) dirs.push('left');
+      if (isFloor(state.row, state.col + 1)) dirs.push('right');
+      return dirs;
+    },
+    // Same read-only, no-tick contract as openDirections(). Lets a
+    // recursive search stop and unwind the instant it succeeds instead of
+    // exhaustively visiting every remaining cell — both the "correct"
+    // shape for a backtracking search and, practically, what keeps a
+    // large maze's worst case comfortably under MAX_STEPS.
+    atGoal: () => state.row === goal.row && state.col === goal.col,
     __mark: (line) => {
       markCount++;
       if (markCount > 3000) throw new Error('Loop is running too long — check your loop condition.');
@@ -1556,8 +1578,8 @@ function simulateGridMaze(levelConfig, userCode) {
 
   try {
     const instrumented = instrumentForLoops(userCode);
-    const fn = new Function('moveRight', 'moveLeft', 'moveUp', 'moveDown', 'wait', '__mark', instrumented !== null ? instrumented : userCode);
-    fn(api.moveRight, api.moveLeft, api.moveUp, api.moveDown, api.wait, api.__mark);
+    const fn = new Function('moveRight', 'moveLeft', 'moveUp', 'moveDown', 'wait', 'openDirections', 'atGoal', '__mark', instrumented !== null ? instrumented : userCode);
+    fn(api.moveRight, api.moveLeft, api.moveUp, api.moveDown, api.wait, api.openDirections, api.atGoal, api.__mark);
   } catch (e) {
     error = e.message;
   }
@@ -2177,6 +2199,7 @@ class GridMazeRunner {
       this.theme === 'foundry' ? this.p.color(20, 12, 7) :
       this.theme === 'vault' ? this.p.color(8, 11, 16) :
       this.theme === 'core' ? this.p.color(16, 6, 10) :
+      this.theme === 'ice' ? this.p.color(10, 16, 26) :
       this.p.color(10, 14, 20)
     );
     p.push();
@@ -2302,6 +2325,18 @@ class GridMazeRunner {
     const foundry = this.theme === 'foundry';
     const vault = this.theme === 'vault';
     const core = this.theme === 'core';
+    const ice = this.theme === 'ice';
+
+    if (ice) {
+      // Pale blue-white ice backdrop with faint crack lines — reads as a
+      // frozen cave wall, not empty space.
+      p.noStroke();
+      p.fill(16, 26, 38);
+      p.rect(0, 0, cols * this.tile, rows * this.tile);
+      p.stroke(40, 60, 82);
+      p.strokeWeight(1);
+      for (let y = 0; y < rows * this.tile; y += this.tile) p.line(0, y, cols * this.tile, y);
+    }
 
     if (core) {
       // Corrupted-flesh-and-metal backdrop — deep red-black with faint
@@ -2372,6 +2407,8 @@ class GridMazeRunner {
           p.fill(isGoal ? p.color(32, 58, 48) : p.color(34, 42, 56));
         } else if (core) {
           p.fill(isGoal ? p.color(32, 58, 48) : p.color(54, 20, 30));
+        } else if (ice) {
+          p.fill(isGoal ? p.color(32, 58, 48) : p.color(36, 56, 78));
         } else {
           p.fill(isGoal ? p.color(32, 58, 48) : p.color(46, 56, 76));
         }
@@ -2379,7 +2416,7 @@ class GridMazeRunner {
 
         // Perimeter glow: a bright edge everywhere the walkable floor meets
         // the void, so it's unmistakable which tiles you can stand on.
-        p.stroke(dungeon ? p.color(210, 130, 50, 160) : foundry ? p.color(255, 140, 50, 170) : vault ? p.color(90, 170, 255, 170) : core ? p.color(220, 60, 90, 170) : p.color(90, 200, 230, 170));
+        p.stroke(dungeon ? p.color(210, 130, 50, 160) : foundry ? p.color(255, 140, 50, 170) : vault ? p.color(90, 170, 255, 170) : core ? p.color(220, 60, 90, 170) : ice ? p.color(160, 220, 255, 190) : p.color(90, 200, 230, 170));
         p.strokeWeight(2);
         if (!isFloor(r - 1, c)) p.line(x + 2, y + 1, x + this.tile - 2, y + 1);
         if (!isFloor(r + 1, c)) p.line(x + 2, y + this.tile - 1, x + this.tile - 2, y + this.tile - 1);
@@ -2415,6 +2452,20 @@ class GridMazeRunner {
           p.fill(70, 130, 200, 90);
           p.circle(x + this.tile * 0.25, y + this.tile * 0.25, 3);
           p.circle(x + this.tile * 0.75, y + this.tile * 0.75, 3);
+        } else if (ice) {
+          p.noStroke();
+          p.fill(200, 235, 255, 110);
+          p.circle(x + this.tile * 0.25, y + this.tile * 0.25, 3);
+          p.circle(x + this.tile * 0.75, y + this.tile * 0.75, 3);
+          // Sparse icicles hanging from ceiling-adjacent floor tiles, same
+          // deterministic-per-cell trick as the dungeon's torches.
+          const icicleRoll = hash01(r * 53 + c * 97 + 11);
+          if (!isFloor(r - 1, c) && !isGoal && icicleRoll < 0.22) {
+            const len = this.tile * (0.35 + icicleRoll);
+            const ix = x + this.tile * (0.3 + 0.4 * hash01(r * 13 + c * 29));
+            p.fill(190, 225, 245, 200);
+            p.triangle(ix - 3, y + 1, ix + 3, y + 1, ix, y + 1 + len);
+          }
         } else if (core) {
           p.noStroke();
           p.fill(200, 60, 90, 100);

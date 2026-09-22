@@ -205,7 +205,16 @@ const Progress = {
     return seeds[worldId];
   },
 
-  isUnlocked(worldId, worldsInOrder) {
+  // Unlocking is off for now (every area is open regardless of clear
+  // status) — direct request, while the later areas are still being
+  // built/tested. Real logic kept below as _isUnlockedByProgress rather
+  // than deleted, so turning this back on later is a one-line change:
+  //   isUnlocked(worldId, worldsInOrder) { return this._isUnlockedByProgress(worldId, worldsInOrder); }
+  isUnlocked() {
+    return true;
+  },
+
+  _isUnlockedByProgress(worldId, worldsInOrder) {
     const index = worldsInOrder.findIndex((w) => w.id === worldId);
     if (index <= 0) return true;
     for (let i = 0; i < index; i++) {
@@ -216,6 +225,22 @@ const Progress = {
 
   getUnlockedSnippets() {
     return this._load(this._key('snippets')) || [];
+  },
+
+  // Which worlds' one-time intro cutscenes (e.g. World 7's crash) have
+  // already played for this slot — same idempotent shape as achievements,
+  // just keyed by world id instead of achievement id.
+  getSeenIntros() {
+    return this._load(this._key('introsSeen')) || [];
+  },
+
+  markIntroSeen(worldId) {
+    const seen = this.getSeenIntros();
+    if (!seen.includes(worldId)) {
+      seen.push(worldId);
+      this._save(this._key('introsSeen'), seen);
+    }
+    return seen;
   },
 
   unlockSnippet(id) {
@@ -260,6 +285,7 @@ const Progress = {
       localStorage.removeItem(this._key('snippets'));
       localStorage.removeItem(this._key('achievements'));
       localStorage.removeItem(this._key('seeds'));
+      localStorage.removeItem(this._key('introsSeen'));
     } catch (e) {
       // ignore
     }

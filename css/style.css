@@ -296,6 +296,11 @@ select {
   color: var(--accent);
 }
 
+.button.secondary.selected {
+  background: var(--accent);
+  color: #04140b;
+}
+
 /* World select / settings */
 .world-grid {
   display: grid;

@@ -52,4 +52,12 @@ const WORLDS = [
     built: true,
     parMoves: 100,
   },
+  {
+    id: 'world7',
+    title: 'The Frozen Caves',
+    concept: 'Recursion',
+    path: 'levels/world7/index.html',
+    built: true,
+    parMoves: 24,
+  },
 ];
